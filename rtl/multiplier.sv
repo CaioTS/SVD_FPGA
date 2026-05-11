@@ -6,9 +6,9 @@ module multiplier #(
     input  logic                    clk,
     input  logic                    rst_n,
     input  logic                    start,
-    input  logic [WIDTH-1:0]        A [0:N-1],  // Coefficient vector
-    input  logic [WIDTH-1:0]        X,            // Input sample — hold stable for full computation
-    output logic [WIDTH-1:0]        Y,            // Filter output (upper WIDTH bits of accumulator)
+    input  logic signed [WIDTH-1:0]        A [0:N-1],  // Coefficient vector
+    input  logic signed [WIDTH-1:0]        X,            // Input sample — hold stable for full computation
+    output logic signed [WIDTH-1:0]        Y,            // Filter output (upper WIDTH bits of accumulator)
     output logic                    calc_done
 );
 
@@ -138,6 +138,6 @@ end
         end
     end
 
-assign Y = y_reg[2*WIDTH+GUARD : WIDTH + GUARD];
-
+//assign Y = y_reg[2*WIDTH+GUARD : WIDTH + GUARD];
+assign Y = y_reg[WIDTH-1 + 5: 5];
 endmodule

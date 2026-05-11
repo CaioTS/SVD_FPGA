@@ -13,21 +13,8 @@ module branch #(
     output [WIDTH-1:0] y,
     output y_done
 );
-
-// ── Vt and Us coefficient matrices ──────────
-    reg [WIDTH-1:0] Vt [0:C-1];   // right-singular vectors  (C coefficients)
-    reg [WIDTH-1:0] Us [0:R-1];   // left-singular * sigma   (R coefficients)
-
-    //TODO This does not work for synthesys, only for simulation. By now use this for testing if the module is working
-    //, later make a proper interface to load these values. Maybe load these in reset.
-    integer i ;
-    initial begin
-        for (int i = 0; i < C; i++)
-            Vt[i] = VT_INIT[i*WIDTH +: WIDTH];
-        for (int i = 0; i < R; i++)
-            Us[i] = US_INIT[i*WIDTH +: WIDTH];
-    end
-
+ logic start;
+ assign start = x_wr_en & coeff_loaded;
  logic VTx_calc_done;
     wire [WIDTH - 1 : 0]Vtx_y;
     multiplier #(
@@ -38,7 +25,7 @@ module branch #(
     (
         .clk(clk),
         .rst_n(reset),
-        .start(x_wr_en),
+        .start(start),
         .A(Vt),
         .X(x),
         .Y(Vtx_y),
@@ -88,5 +75,59 @@ module branch #(
         .Y(y),
         .calc_done(y_done)
     );  
+
+reg signed [WIDTH-1:0] Vt [0:C-1];   // right-singular vectors  (C coefficients)
+reg signed [WIDTH-1:0] Us [0:R-1];   // left-singular * sigma   (R coefficients)
+
+
+typedef enum logic {
+        COEFF_LOADING = 1'b0,
+        COEFF_DONE    = 1'b1
+    } coeff_state_t;
+ 
+    coeff_state_t coeff_state;
+ 
+    // Use the wider of C and R for the counter
+    localparam COEFF_CNT_WIDTH = $clog2((C > R ? C : R)) + 1;
+ 
+    logic [COEFF_CNT_WIDTH-1:0] coeff_cnt;
+    logic                       coeff_loaded;  // high when coefficients are ready
+ 
+    always_ff @(posedge clk or negedge reset) begin
+        if (!reset) begin
+            coeff_state  <= COEFF_LOADING;
+            coeff_cnt    <= '0;
+            coeff_loaded <= 1'b0;
+            for (int i = 0; i < C; i++) Vt[i] <= '0;
+            for (int i = 0; i < R; i++) Us[i] <= '0;
+        end
+        else begin
+            case (coeff_state)
+ 
+                COEFF_LOADING: begin
+                    // Phase 1: fill Vt (indices 0..C-1)
+                    if (coeff_cnt < COEFF_CNT_WIDTH'(C)) begin
+                        Vt[coeff_cnt] <= VT_INIT[coeff_cnt*WIDTH +: WIDTH];
+                        coeff_cnt     <= coeff_cnt + 1'b1;
+                    end
+                    // Phase 2: fill Us (indices 0..R-1), reuse counter offset by C
+                    else if (coeff_cnt < COEFF_CNT_WIDTH'(C + R)) begin
+                        Us[coeff_cnt - COEFF_CNT_WIDTH'(C)] <= US_INIT[(coeff_cnt - COEFF_CNT_WIDTH'(C))*WIDTH +: WIDTH];
+                        coeff_cnt <= coeff_cnt + 1'b1;
+                    end
+                    // Both arrays loaded
+                    else begin
+                        coeff_state  <= COEFF_DONE;
+                        coeff_loaded <= 1'b1;
+                    end
+                end
+ 
+                COEFF_DONE: begin
+                    coeff_loaded <= 1'b1;   // hold high until next reset
+                end
+ 
+            endcase
+        end
+    end
 
 endmodule

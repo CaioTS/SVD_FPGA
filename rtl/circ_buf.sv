@@ -26,7 +26,7 @@ module circ_buf #(
     reg [WIDTH -1 : 0] ram_din;
     reg ram_wr_en;
     integer i;
-
+    reg reset_done;
 
     ram #(
     .WIDTH(WIDTH),
@@ -63,7 +63,8 @@ module circ_buf #(
         next_state = RESET;
         case (current_state)
             RESET: begin                
-                    next_state = READ;
+                    if (reset_done )next_state = READ;
+                    else next_state = RESET;
             end
  
             READ: begin
@@ -85,15 +86,21 @@ module circ_buf #(
             wr_ptr  <= 0;
             ram_wr_en <= 0;
             ram_din <= 0;
+            reset_done <= 0;
         end 
         
         else begin
             ram_din <= din;
             case (current_state)
                 RESET: begin
-                    ram_ptr <= read_addr;
+                    ram_din <= 0;
+                    ram_ptr <= ram_ptr + 1;
                     wr_ptr <= 0;
-                    ram_wr_en <= 0;                
+                    ram_wr_en <= 1;
+                    if (ram_ptr == (DEPTH - 1)) reset_done <= 1;
+                    else reset_done <= 0;
+
+                                    
                 end
     
                 READ: begin
