@@ -35,4 +35,4 @@ wave:
 	gtkwave $(FST)
 
 clean:
-	rm -f *.out *.vcd *.fst
+	rm -f *.out *.vcd *.fst *.txt
