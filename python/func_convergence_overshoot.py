@@ -459,7 +459,7 @@ def quantize_matrix(matrix,max_ov, width=8):
     quantized = np.clip(np.round(matrix * scale), -(2**(width-1)), 2**(width-1)-1)
     return quantized.astype(np.int8)
 
-def matrix_to_sv_hex(matrix, name, width=8):
+def matrix_to_sv_hex(matrix, name, width=16):
     rows, cols = matrix.shape
     hex_digits = width // 4  # nibbles per element
 
@@ -500,5 +500,7 @@ def norm(x):
 fig = px.line()
 fig.add_scatter(y = norm(y), name="y python")
 fig.add_scatter(y = norm(df['y']), name="y FPGA")
+fig.add_scatter(y = norm(y) - norm(df['y']) , name="Error")
+
 fig.show()
 # %%

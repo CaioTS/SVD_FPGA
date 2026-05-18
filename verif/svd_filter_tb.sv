@@ -5,7 +5,7 @@ module svd_filter_tb;
     // ─────────────────────────────────────────────
     // Parameters
     // ─────────────────────────────────────────────
-    parameter WIDTH = 8;
+    parameter WIDTH = 16;
     parameter B     = 2;
     parameter C     = 81;
     parameter R     = 80;
@@ -61,7 +61,7 @@ module svd_filter_tb;
             reset = 0;          // active low
             x     = 0;
             sample_idx = 0;
-            ignore_first_sample = 0;
+            ignore_first_sample = 1;
             repeat(4) @(posedge clk);
             reset = 1;
             @(posedge clk);
