@@ -17,6 +17,11 @@ module branch #(
  assign start = x_wr_en & coeff_loaded;
  logic VTx_calc_done;
     wire [WIDTH - 1 : 0]Vtx_y;
+
+reg signed [WIDTH-1:0] Vt [0:C-1];   // right-singular vectors  (C coefficients)
+reg signed [WIDTH-1:0] Us [0:R-1];   // left-singular * sigma   (R coefficients)
+
+
     multiplier #(
         .N(C),
         .WIDTH(WIDTH),
@@ -75,9 +80,6 @@ module branch #(
         .Y(y),
         .calc_done(y_done)
     );  
-
-reg signed [WIDTH-1:0] Vt [0:C-1];   // right-singular vectors  (C coefficients)
-reg signed [WIDTH-1:0] Us [0:R-1];   // left-singular * sigma   (R coefficients)
 
 
 typedef enum logic {

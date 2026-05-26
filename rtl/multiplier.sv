@@ -139,5 +139,5 @@ end
     end
 
 //assign Y = y_reg[2*WIDTH+GUARD : WIDTH + GUARD];
-assign Y = y_reg[WIDTH-1 + 5: 5];
+assign Y = y_reg[WIDTH-1 + 8: 8];
 endmodule

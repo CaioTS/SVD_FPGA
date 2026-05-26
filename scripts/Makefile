@@ -29,6 +29,7 @@ help:
 	@echo "Available targets:"
 	@echo "  make simulation TB=<name>   Run simulation"
 	@echo "  make wave TB=<name>         Open waveform"
+	@echo "  make synth                  Synthetize svd_filter"
 	@echo "  make clean                  Clean outputs"
 	@echo ""
 	@echo "=============================================================="

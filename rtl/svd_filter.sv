@@ -1,16 +1,9 @@
 /*
 TODO 
  
-- Make the python golden value to compare with the FPGA outputs
-
-- Make a script that runs the system verilog calculation (store results in a file),then run a pyhton script to 
-  compare and plot the differences (similar to TCC but more autonomous)
-
 - See how Rafael is implementing the FIR filters to make a clean substitution 
 
 - Check for theoretical comparison between normal FIR filter with SVD_filter, it should be somewhere in the drive folder or git
-
-
 
 */
 
