@@ -1,0 +1,75 @@
+#-----------------------------------------------------------
+# Vivado v2025.2 (64-bit)
+# SW Build 6299465 on Fri Nov 14 12:34:56 MST 2025
+# IP Build 6300035 on Fri Nov 14 10:48:45 MST 2025
+# SharedData Build 6298862 on Thu Nov 13 04:50:51 MST 2025
+# Start of session at: Sun Jun 14 20:58:00 2026
+# Process ID         : 16802
+# Current directory  : /home/caio/Documents/Mestrado/SVD_FPGA/work
+# Command line       : vivado -mode batch -source ../scripts/synth.tcl -log output/synth.log -journal output/synth.jou
+# Log file           : /home/caio/Documents/Mestrado/SVD_FPGA/work/output/synth.log
+# Journal file       : /home/caio/Documents/Mestrado/SVD_FPGA/work/output/synth.jou
+# Running On         : caio
+# Platform           : Ubuntu
+# Operating System   : Ubuntu 24.04.4 LTS
+# Processor Detail   : AMD Ryzen 5 4600H with Radeon Graphics
+# CPU Frequency      : 3019.112 MHz
+# CPU Physical cores : 6
+# CPU Logical cores  : 12
+# Host memory        : 7709 MB
+# Swap memory        : 4294 MB
+# Total Virtual      : 12004 MB
+# Available Virtual  : 6911 MB
+#-----------------------------------------------------------
+source ../scripts/synth.tcl
+# set PART    "xc7z007sclg225-2"
+# set TOP     "svd_filter"    
+# set RTL_DIR "../rtl"
+# set OUT_DIR "./output"
+# set WIDTH 16
+# set B      2
+# set C      64
+# set R      101
+# set opts "-flatten_hierarchy none -max_dsp 0"
+# file mkdir $OUT_DIR
+# read_verilog -sv [glob $RTL_DIR/*.sv]
+# read_xdc ../constraints/Zybo-Z7-Master.xdc
+# synth_design -top $TOP -part $PART \
+# -generic WIDTH=$WIDTH \
+# -generic B=$B \
+# -generic C=$C \
+# -generic R=$R \
+# {*}$opts
+Command: synth_design -top svd_filter -part xc7z007sclg225-2 -generic WIDTH=16 -generic B=2 -generic C=64 -generic R=101 -flatten_hierarchy none -max_dsp 0
+Starting synth_design
+Attempting to get a license for feature 'Synthesis' and/or device 'xc7z007s'
+INFO: [Common 17-349] Got license for feature 'Synthesis' and/or device 'xc7z007s'
+INFO: [Vivado_Tcl 4-287] User specified maximum number of block DSP allowed in design is 0
+INFO: [Device 21-403] Loading part xc7z007sclg225-2
+INFO: [Synth 8-7079] Multithreading enabled for synth_design using a maximum of 7 processes.
+INFO: [Synth 8-7078] Launching helper process for spawning children vivado processes
+INFO: [Synth 8-7075] Helper process launched with PID 16891
+---------------------------------------------------------------------------------
+Starting RTL Elaboration : Time (s): cpu = 00:00:04 ; elapsed = 00:00:04 . Memory (MB): peak = 2209.684 ; gain = 481.812 ; free physical = 199 ; free virtual = 5336
+---------------------------------------------------------------------------------
+WARNING: [Synth 8-6901] identifier 'WIDTH' is used before its declaration [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/fir_filter_wrapper.sv:5]
+WARNING: [Synth 8-6901] identifier 'WIDTH' is used before its declaration [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/fir_filter_wrapper.sv:6]
+WARNING: [Synth 8-6901] identifier 'WIDTH' is used before its declaration [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/fir_filter_wrapper.sv:10]
+WARNING: [Synth 8-6901] identifier 'R' is used before its declaration [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/fir_filter_wrapper.sv:11]
+WARNING: [Synth 8-6901] identifier 'C' is used before its declaration [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/fir_filter_wrapper.sv:11]
+ERROR: [Synth 8-2716] syntax error near 'parameter' [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/svd_filter_wrapper.sv:6]
+ERROR: [Synth 8-10307] SystemVerilog keyword 'parameter' used in incorrect context [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/svd_filter_wrapper.sv:6]
+INFO: [Synth 8-9084] Verilog file '/home/caio/Documents/Mestrado/SVD_FPGA/rtl/svd_filter_wrapper.sv' ignored due to errors
+ERROR: [Synth 8-12188] Failed to read verilog '/home/caio/Documents/Mestrado/SVD_FPGA/rtl/svd_filter_wrapper.sv'
+---------------------------------------------------------------------------------
+Finished RTL Elaboration : Time (s): cpu = 00:00:05 ; elapsed = 00:00:06 . Memory (MB): peak = 2291.652 ; gain = 563.781 ; free physical = 126 ; free virtual = 5248
+---------------------------------------------------------------------------------
+RTL Elaboration failed
+INFO: [Common 17-83] Releasing license: Synthesis
+8 Infos, 5 Warnings, 0 Critical Warnings and 4 Errors encountered.
+synth_design failed
+synth_design: Time (s): cpu = 00:00:09 ; elapsed = 00:00:09 . Memory (MB): peak = 2291.660 ; gain = 719.266 ; free physical = 134 ; free virtual = 5252
+INFO: [Common 17-2834] synth_design peak Physical Memory [PSS] (MB): overall = 1905.180; main = 1558.000; forked = 347.180
+INFO: [Common 17-2834] synth_design peak Virtual Memory [VSS] (MB): overall = 3278.145; main = 2291.656; forked = 986.488
+ERROR: [Common 17-69] Command failed: Synthesis failed - please see the console or run log file for details
+INFO: [Common 17-206] Exiting Vivado at Sun Jun 14 20:58:13 2026...

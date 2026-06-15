@@ -7,8 +7,11 @@
 ##Clock signal
 #set_property -dict { PACKAGE_PIN K17   IOSTANDARD LVCMOS33 } [get_ports { clk }]; #IO_L12P_T1_MRCC_35 Sch=sysclk
 create_clock -add -name clk_pin   -period 8.00 -waveform {0 4} [get_ports { clk }];
-create_generated_clock -name x_clk -source [get_ports clk] -divide_by 125000 [get_ports x_clk]
-set_false_path -from [get_clocks x_clk] -to [get_clocks clk_pin]
+create_clock -name x_clk -period 1000000.000 [get_nets x_clk]
+
+set_clock_groups -asynchronous \
+    -group [get_clocks clk_pin] \
+    -group [get_clocks x_clk]
 
 ##Switches
 #set_property -dict { PACKAGE_PIN G15   IOSTANDARD LVCMOS33 } [get_ports { sw[0] }]; #IO_L19N_T3_VREF_35 Sch=sw[0]

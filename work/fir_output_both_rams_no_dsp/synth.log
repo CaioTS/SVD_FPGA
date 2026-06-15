@@ -1,0 +1,376 @@
+#-----------------------------------------------------------
+# Vivado v2025.2 (64-bit)
+# SW Build 6299465 on Fri Nov 14 12:34:56 MST 2025
+# IP Build 6300035 on Fri Nov 14 10:48:45 MST 2025
+# SharedData Build 6298862 on Thu Nov 13 04:50:51 MST 2025
+# Start of session at: Sun Jun 14 22:08:02 2026
+# Process ID         : 22187
+# Current directory  : /home/caio/Documents/Mestrado/SVD_FPGA/work
+# Command line       : vivado -mode batch -source ../scripts/synth.tcl -log output/synth.log -journal output/synth.jou
+# Log file           : /home/caio/Documents/Mestrado/SVD_FPGA/work/output/synth.log
+# Journal file       : /home/caio/Documents/Mestrado/SVD_FPGA/work/output/synth.jou
+# Running On         : caio
+# Platform           : Ubuntu
+# Operating System   : Ubuntu 24.04.4 LTS
+# Processor Detail   : AMD Ryzen 5 4600H with Radeon Graphics
+# CPU Frequency      : 2965.866 MHz
+# CPU Physical cores : 6
+# CPU Logical cores  : 12
+# Host memory        : 7709 MB
+# Swap memory        : 4294 MB
+# Total Virtual      : 12004 MB
+# Available Virtual  : 6597 MB
+#-----------------------------------------------------------
+source ../scripts/synth.tcl
+# set PART    "xc7z007sclg225-2"
+# set TOP     "fir_filter"    
+# set RTL_DIR "../rtl"
+# set OUT_DIR "./output"
+# set WIDTH 16
+# set B      2
+# set C      80
+# set R      80
+# set opts "-flatten_hierarchy none -max_dsp 0"
+# file mkdir $OUT_DIR
+# read_verilog -sv [glob $RTL_DIR/*.sv]
+# read_xdc ../constraints/Zybo-Z7-Master.xdc
+# synth_design -top $TOP -part $PART \
+# -generic WIDTH=$WIDTH \
+# -generic B=$B \
+# -generic C=$C \
+# -generic R=$R \
+# {*}$opts
+Command: synth_design -top fir_filter -part xc7z007sclg225-2 -generic WIDTH=16 -generic B=2 -generic C=80 -generic R=80 -flatten_hierarchy none -max_dsp 0
+Starting synth_design
+Attempting to get a license for feature 'Synthesis' and/or device 'xc7z007s'
+INFO: [Common 17-349] Got license for feature 'Synthesis' and/or device 'xc7z007s'
+INFO: [Vivado_Tcl 4-287] User specified maximum number of block DSP allowed in design is 0
+INFO: [Device 21-403] Loading part xc7z007sclg225-2
+INFO: [Synth 8-7079] Multithreading enabled for synth_design using a maximum of 7 processes.
+INFO: [Synth 8-7078] Launching helper process for spawning children vivado processes
+INFO: [Synth 8-7075] Helper process launched with PID 22220
+---------------------------------------------------------------------------------
+Starting RTL Elaboration : Time (s): cpu = 00:00:04 ; elapsed = 00:00:04 . Memory (MB): peak = 2209.305 ; gain = 482.875 ; free physical = 848 ; free virtual = 5078
+---------------------------------------------------------------------------------
+WARNING: [Synth 8-6901] identifier 'WIDTH' is used before its declaration [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/fir_filter_wrapper.sv:5]
+WARNING: [Synth 8-6901] identifier 'WIDTH' is used before its declaration [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/fir_filter_wrapper.sv:6]
+WARNING: [Synth 8-6901] identifier 'WIDTH' is used before its declaration [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/fir_filter_wrapper.sv:10]
+WARNING: [Synth 8-6901] identifier 'R' is used before its declaration [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/fir_filter_wrapper.sv:11]
+WARNING: [Synth 8-6901] identifier 'C' is used before its declaration [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/fir_filter_wrapper.sv:11]
+INFO: [Synth 8-6157] synthesizing module 'fir_filter' [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/fir_filter.sv:1]
+	Parameter WIDTH bound to: 16 - type: integer 
+	Parameter B bound to: 2 - type: integer 
+	Parameter C bound to: 80 - type: integer 
+	Parameter R bound to: 80 - type: integer 
+INFO: [Synth 8-6157] synthesizing module 'circ_buf' [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/circ_buf.sv:12]
+	Parameter WIDTH bound to: 16 - type: integer 
+	Parameter DEPTH bound to: 6400 - type: integer 
+INFO: [Synth 8-6157] synthesizing module 'ram' [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/ram.sv:1]
+	Parameter WIDTH bound to: 16 - type: integer 
+	Parameter DEPTH bound to: 6400 - type: integer 
+INFO: [Synth 8-6155] done synthesizing module 'ram' (0#1) [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/ram.sv:1]
+INFO: [Synth 8-155] case statement is not full and has no default [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/circ_buf.sv:94]
+INFO: [Synth 8-6155] done synthesizing module 'circ_buf' (0#1) [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/circ_buf.sv:12]
+INFO: [Synth 8-6157] synthesizing module 'sparser' [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/sparser.sv:1]
+	Parameter N bound to: 6400 - type: integer 
+	Parameter DELTA bound to: 1 - type: integer 
+INFO: [Synth 8-155] case statement is not full and has no default [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/sparser.sv:84]
+INFO: [Synth 8-6155] done synthesizing module 'sparser' (0#1) [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/sparser.sv:1]
+INFO: [Synth 8-6157] synthesizing module 'multiplier' [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/multiplier.sv:1]
+	Parameter N bound to: 6400 - type: integer 
+	Parameter WIDTH bound to: 16 - type: integer 
+	Parameter GUARD bound to: 0 - type: integer 
+INFO: [Synth 8-155] case statement is not full and has no default [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/multiplier.sv:100]
+INFO: [Synth 8-6155] done synthesizing module 'multiplier' (0#1) [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/multiplier.sv:1]
+INFO: [Synth 8-6155] done synthesizing module 'fir_filter' (0#1) [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/fir_filter.sv:1]
+---------------------------------------------------------------------------------
+Finished RTL Elaboration : Time (s): cpu = 00:00:06 ; elapsed = 00:00:06 . Memory (MB): peak = 2296.273 ; gain = 569.844 ; free physical = 770 ; free virtual = 5000
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Start Handling Custom Attributes
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Finished Handling Custom Attributes : Time (s): cpu = 00:00:06 ; elapsed = 00:00:06 . Memory (MB): peak = 2308.148 ; gain = 581.719 ; free physical = 766 ; free virtual = 4997
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Finished RTL Optimization Phase 1 : Time (s): cpu = 00:00:06 ; elapsed = 00:00:06 . Memory (MB): peak = 2308.148 ; gain = 581.719 ; free physical = 766 ; free virtual = 4997
+---------------------------------------------------------------------------------
+Netlist sorting complete. Time (s): cpu = 00:00:00.01 ; elapsed = 00:00:00.01 . Memory (MB): peak = 2308.148 ; gain = 0.000 ; free physical = 766 ; free virtual = 4997
+INFO: [Project 1-570] Preparing netlist for logic optimization
+
+Processing XDC Constraints
+Initializing timing engine
+Parsing XDC File [/home/caio/Documents/Mestrado/SVD_FPGA/constraints/Zybo-Z7-Master.xdc]
+Finished Parsing XDC File [/home/caio/Documents/Mestrado/SVD_FPGA/constraints/Zybo-Z7-Master.xdc]
+Completed Processing XDC Constraints
+
+Netlist sorting complete. Time (s): cpu = 00:00:00 ; elapsed = 00:00:00 . Memory (MB): peak = 2426.887 ; gain = 0.000 ; free physical = 735 ; free virtual = 4966
+INFO: [Project 1-111] Unisim Transformation Summary:
+No Unisim elements were transformed.
+
+Constraint Validation Runtime : Time (s): cpu = 00:00:00.01 ; elapsed = 00:00:00 . Memory (MB): peak = 2426.922 ; gain = 0.000 ; free physical = 735 ; free virtual = 4966
+---------------------------------------------------------------------------------
+Finished Constraint Validation : Time (s): cpu = 00:00:12 ; elapsed = 00:00:12 . Memory (MB): peak = 2426.922 ; gain = 700.492 ; free physical = 746 ; free virtual = 4976
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Start Loading Part and Timing Information
+---------------------------------------------------------------------------------
+Loading part: xc7z007sclg225-2
+---------------------------------------------------------------------------------
+Finished Loading Part and Timing Information : Time (s): cpu = 00:00:12 ; elapsed = 00:00:12 . Memory (MB): peak = 2434.891 ; gain = 708.461 ; free physical = 737 ; free virtual = 4967
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Start Applying 'set_property' XDC Constraints
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Finished applying 'set_property' XDC Constraints : Time (s): cpu = 00:00:12 ; elapsed = 00:00:12 . Memory (MB): peak = 2434.891 ; gain = 708.461 ; free physical = 737 ; free virtual = 4967
+---------------------------------------------------------------------------------
+INFO: [Synth 8-802] inferred FSM for state register 'current_state_reg' in module 'circ_buf'
+INFO: [Synth 8-802] inferred FSM for state register 'current_state_reg' in module 'sparser'
+INFO: [Synth 8-802] inferred FSM for state register 'current_state_reg' in module 'multiplier'
+---------------------------------------------------------------------------------------------------
+                   State |                     New Encoding |                Previous Encoding 
+---------------------------------------------------------------------------------------------------
+                   RESET |                               00 |                               00
+                    READ |                               01 |                               01
+                   WRITE |                               10 |                               10
+---------------------------------------------------------------------------------------------------
+INFO: [Synth 8-3354] encoded FSM with state register 'current_state_reg' using encoding 'sequential' in module 'circ_buf'
+---------------------------------------------------------------------------------------------------
+                   State |                     New Encoding |                Previous Encoding 
+---------------------------------------------------------------------------------------------------
+                   RESET |                          0000001 |                              000
+                    IDLE |                          0000010 |                              001
+                   START |                          0000100 |                              010
+              WAIT_WRITE |                          0001000 |                              011
+       CALCULATE_ADDRESS |                          0010000 |                              100
+                    READ |                          0100000 |                              101
+                    DONE |                          1000000 |                              110
+---------------------------------------------------------------------------------------------------
+INFO: [Synth 8-3354] encoded FSM with state register 'current_state_reg' using encoding 'one-hot' in module 'sparser'
+---------------------------------------------------------------------------------------------------
+                   State |                     New Encoding |                Previous Encoding 
+---------------------------------------------------------------------------------------------------
+                   RESET |                          0000001 |                              000
+                    IDLE |                          0000010 |                              001
+                   START |                          0000100 |                              010
+             WAIT_CYCLES |                          0001000 |                              011
+                LOAD_ACC |                          0010000 |                              100
+                MULTIPLY |                          0100000 |                              101
+                    DONE |                          1000000 |                              110
+---------------------------------------------------------------------------------------------------
+INFO: [Synth 8-3354] encoded FSM with state register 'current_state_reg' using encoding 'one-hot' in module 'multiplier'
+---------------------------------------------------------------------------------
+Finished RTL Optimization Phase 2 : Time (s): cpu = 00:00:13 ; elapsed = 00:00:13 . Memory (MB): peak = 2434.891 ; gain = 708.461 ; free physical = 749 ; free virtual = 4980
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Start RTL Component Statistics 
+---------------------------------------------------------------------------------
+Detailed RTL Component Info : 
++---Adders : 
+	   2 Input   33 Bit       Adders := 1     
+	   2 Input   14 Bit       Adders := 2     
+	   2 Input   13 Bit       Adders := 3     
+	   2 Input    2 Bit       Adders := 1     
++---Registers : 
+	               33 Bit    Registers := 2     
+	               32 Bit    Registers := 1     
+	               16 Bit    Registers := 6     
+	               14 Bit    Registers := 1     
+	               13 Bit    Registers := 5     
+	                2 Bit    Registers := 1     
+	                1 Bit    Registers := 8     
++---Muxes : 
+	   7 Input   33 Bit        Muxes := 2     
+	   7 Input   32 Bit        Muxes := 1     
+	   3 Input   16 Bit        Muxes := 1     
+	   2 Input   16 Bit        Muxes := 1     
+	   7 Input   14 Bit        Muxes := 1     
+	   3 Input   13 Bit        Muxes := 2     
+	   7 Input   13 Bit        Muxes := 3     
+	   2 Input   13 Bit        Muxes := 1     
+	   7 Input    7 Bit        Muxes := 2     
+	   2 Input    7 Bit        Muxes := 6     
+	   3 Input    2 Bit        Muxes := 1     
+	   2 Input    2 Bit        Muxes := 2     
+	   7 Input    2 Bit        Muxes := 1     
+	   3 Input    1 Bit        Muxes := 4     
+	   7 Input    1 Bit        Muxes := 8     
+---------------------------------------------------------------------------------
+Finished RTL Component Statistics 
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Start Part Resource Summary
+---------------------------------------------------------------------------------
+Part Resources:
+DSPs: 66 (col length:40)
+BRAMs: 100 (col length: RAMB18 40 RAMB36 20)
+---------------------------------------------------------------------------------
+Finished Part Resource Summary
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Start Cross Boundary and Area Optimization
+---------------------------------------------------------------------------------
+DSP Report: Generating DSP product0, operation Mode is: A*B.
+DSP Report: operator product0 is absorbed into DSP product0.
+---------------------------------------------------------------------------------
+Finished Cross Boundary and Area Optimization : Time (s): cpu = 00:00:15 ; elapsed = 00:00:16 . Memory (MB): peak = 2434.891 ; gain = 708.461 ; free physical = 730 ; free virtual = 4967
+---------------------------------------------------------------------------------
+WARNING: [Synth 8-3323] Resources of type DSP have been overutilized. Used = 1, Available = 0. Use report_utilization command for details.
+ Sort Area is  product0_0 : 0 0 : 1937 1937 : Used 1 time 0
+ DSP resource Status: product0_0 0 1937 1937: Used 1 time : Rejected (1 > 0) uniquify 0 
+---------------------------------------------------------------------------------
+Start ROM, RAM, DSP, Shift Register and Retiming Reporting
+---------------------------------------------------------------------------------
+
+Distributed RAM: Preliminary Mapping Report (see note below)
++------------+---------------+----------------+----------------------+------------------+
+|Module Name | RTL Object    | Inference      | Size (Depth x Width) | Primitives       | 
++------------+---------------+----------------+----------------------+------------------+
+|ram:        | ram_block_reg | User Attribute | 8 K x 16             | RAM256X1S x 400  | 
+|ram:        | ram_block_reg | User Attribute | 8 K x 16             | RAM256X1S x 400  | 
++------------+---------------+----------------+----------------------+------------------+
+
+Note: The table above is a preliminary report that shows the Distributed RAMs at the current stage of the synthesis flow. Some Distributed RAMs may be reimplemented as non Distributed RAM primitives later in the synthesis flow. Multiple instantiated RAMs are reported only once.
+
+DSP: Preliminary Mapping Report (see note below. The ' indicates corresponding REG is set)
++------------+-------------+--------+--------+--------+--------+--------+------+------+------+------+-------+------+------+
+|Module Name | DSP Mapping | A Size | B Size | C Size | D Size | P Size | AREG | BREG | CREG | DREG | ADREG | MREG | PREG | 
++------------+-------------+--------+--------+--------+--------+--------+------+------+------+------+-------+------+------+
+|multiplier  | A*B         | 16     | 16     | -      | -      | 32     | 0    | 0    | -    | -    | -     | 0    | 0    | 
++------------+-------------+--------+--------+--------+--------+--------+------+------+------+------+-------+------+------+
+
+Note: The table above is a preliminary report that shows the DSPs inferred at the current stage of the synthesis flow. Some DSP may be reimplemented as non DSP primitives later in the synthesis flow. Multiple instantiated DSPs are reported only once.
+---------------------------------------------------------------------------------
+Finished ROM, RAM, DSP, Shift Register and Retiming Reporting
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Start Applying XDC Timing Constraints
+---------------------------------------------------------------------------------
+WARNING: [Synth 8-681] value '1000000000.0ps' out of range, cropping to '214748368.0ps' [/home/caio/Documents/Mestrado/SVD_FPGA/constraints/Zybo-Z7-Master.xdc:10]
+WARNING: [Synth 8-681] value '500000000.0ps' out of range, cropping to '214748368.0ps' [/home/caio/Documents/Mestrado/SVD_FPGA/constraints/Zybo-Z7-Master.xdc:10]
+WARNING: [Synth 8-681] value '1000000000.0ps' out of range, cropping to '214748368.0ps' [/home/caio/Documents/Mestrado/SVD_FPGA/constraints/Zybo-Z7-Master.xdc:10]
+WARNING: [Synth 8-681] value '500000000.0ps' out of range, cropping to '214748368.0ps' [/home/caio/Documents/Mestrado/SVD_FPGA/constraints/Zybo-Z7-Master.xdc:10]
+---------------------------------------------------------------------------------
+Finished Applying XDC Timing Constraints : Time (s): cpu = 00:00:20 ; elapsed = 00:00:20 . Memory (MB): peak = 2494.891 ; gain = 768.461 ; free physical = 618 ; free virtual = 4855
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Start Timing Optimization
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Finished Timing Optimization : Time (s): cpu = 00:00:23 ; elapsed = 00:00:24 . Memory (MB): peak = 2553.953 ; gain = 827.523 ; free physical = 571 ; free virtual = 4809
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Start ROM, RAM, DSP, Shift Register and Retiming Reporting
+---------------------------------------------------------------------------------
+
+Distributed RAM: Final Mapping Report
++------------+---------------+----------------+----------------------+------------------+
+|Module Name | RTL Object    | Inference      | Size (Depth x Width) | Primitives       | 
++------------+---------------+----------------+----------------------+------------------+
+|ram:        | ram_block_reg | User Attribute | 8 K x 16             | RAM256X1S x 400  | 
+|ram:        | ram_block_reg | User Attribute | 8 K x 16             | RAM256X1S x 400  | 
++------------+---------------+----------------+----------------------+------------------+
+
+---------------------------------------------------------------------------------
+Finished ROM, RAM, DSP, Shift Register and Retiming Reporting
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Start Technology Mapping
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Finished Technology Mapping : Time (s): cpu = 00:00:24 ; elapsed = 00:00:25 . Memory (MB): peak = 2553.953 ; gain = 827.523 ; free physical = 565 ; free virtual = 4803
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Start IO Insertion
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Start Final Netlist Cleanup
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Finished Final Netlist Cleanup
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Finished IO Insertion : Time (s): cpu = 00:00:28 ; elapsed = 00:00:28 . Memory (MB): peak = 2708.766 ; gain = 982.336 ; free physical = 442 ; free virtual = 4680
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Start Renaming Generated Instances
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Finished Renaming Generated Instances : Time (s): cpu = 00:00:28 ; elapsed = 00:00:28 . Memory (MB): peak = 2708.766 ; gain = 982.336 ; free physical = 432 ; free virtual = 4670
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Start Handling Custom Attributes
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Finished Handling Custom Attributes : Time (s): cpu = 00:00:28 ; elapsed = 00:00:29 . Memory (MB): peak = 2708.766 ; gain = 982.336 ; free physical = 432 ; free virtual = 4671
+---------------------------------------------------------------------------------
+---------------------------------------------------------------------------------
+Start Writing Synthesis Report
+---------------------------------------------------------------------------------
+
+Report BlackBoxes: 
++-+--------------+----------+
+| |BlackBox name |Instances |
++-+--------------+----------+
++-+--------------+----------+
+
+Report Cell Usage: 
++------+----------+------+
+|      |Cell      |Count |
++------+----------+------+
+|1     |BUFG      |     1|
+|2     |CARRY4    |    78|
+|3     |LUT1      |    40|
+|4     |LUT2      |   202|
+|5     |LUT3      |   101|
+|6     |LUT4      |   122|
+|7     |LUT5      |    24|
+|8     |LUT6      |   415|
+|9     |MUXF7     |    96|
+|10    |RAM256X1S |   800|
+|11    |FDCE      |   207|
+|12    |FDPE      |     3|
+|13    |FDRE      |    48|
+|14    |IBUF      |    49|
+|15    |OBUF      |    17|
++------+----------+------+
+---------------------------------------------------------------------------------
+Finished Writing Synthesis Report : Time (s): cpu = 00:00:28 ; elapsed = 00:00:29 . Memory (MB): peak = 2708.766 ; gain = 982.336 ; free physical = 432 ; free virtual = 4671
+---------------------------------------------------------------------------------
+Synthesis finished with 0 errors, 0 critical warnings and 5 warnings.
+Synthesis Optimization Runtime : Time (s): cpu = 00:00:26 ; elapsed = 00:00:27 . Memory (MB): peak = 2708.766 ; gain = 863.562 ; free physical = 432 ; free virtual = 4671
+Synthesis Optimization Complete : Time (s): cpu = 00:00:28 ; elapsed = 00:00:29 . Memory (MB): peak = 2708.773 ; gain = 982.336 ; free physical = 432 ; free virtual = 4671
+INFO: [Project 1-571] Translating synthesized netlist
+Netlist sorting complete. Time (s): cpu = 00:00:03 ; elapsed = 00:00:00.02 . Memory (MB): peak = 2708.773 ; gain = 0.000 ; free physical = 591 ; free virtual = 4829
+INFO: [Netlist 29-17] Analyzing 974 Unisim elements for replacement
+INFO: [Netlist 29-28] Unisim Transformation completed in 0 CPU seconds
+INFO: [Project 1-570] Preparing netlist for logic optimization
+Parsing XDC File [/home/caio/Documents/Mestrado/SVD_FPGA/constraints/Zybo-Z7-Master.xdc]
+Finished Parsing XDC File [/home/caio/Documents/Mestrado/SVD_FPGA/constraints/Zybo-Z7-Master.xdc]
+INFO: [Opt 31-138] Pushed 0 inverter(s) to 0 load pin(s).
+Netlist sorting complete. Time (s): cpu = 00:00:00 ; elapsed = 00:00:00 . Memory (MB): peak = 2764.793 ; gain = 0.000 ; free physical = 595 ; free virtual = 4833
+INFO: [Project 1-111] Unisim Transformation Summary:
+  A total of 800 instances were transformed.
+  RAM256X1S => RAM256X1S (MUXF7(x2), MUXF8, RAMS64E(x4)): 800 instances
+
+Synth Design complete | Checksum: a6478ada
+INFO: [Common 17-83] Releasing license: Synthesis
+34 Infos, 10 Warnings, 0 Critical Warnings and 0 Errors encountered.
+synth_design completed successfully
+synth_design: Time (s): cpu = 00:00:37 ; elapsed = 00:00:35 . Memory (MB): peak = 2764.828 ; gain = 1192.812 ; free physical = 594 ; free virtual = 4832
+INFO: [Common 17-2834] synth_design peak Physical Memory [PSS] (MB): overall = 2101.717; main = 2101.717; forked = 338.105
+INFO: [Common 17-2834] synth_design peak Virtual Memory [VSS] (MB): overall = 3429.094; main = 2764.797; forked = 994.199
+# report_timing_summary -file $OUT_DIR/timing_synth.rpt
+INFO: [Timing 38-35] Done setting XDC timing constraints.
+INFO: [Timing 38-91] UpdateTimingParams: Speed grade: -2, Delay Type: min_max.
+INFO: [Timing 38-191] Multithreading enabled for timing update using a maximum of 8 CPUs
+report_timing_summary: Time (s): cpu = 00:00:13 ; elapsed = 00:00:08 . Memory (MB): peak = 2764.828 ; gain = 0.000 ; free physical = 588 ; free virtual = 4826
+# report_utilization    -file $OUT_DIR/utilization_synth.rpt
+# write_checkpoint -force $OUT_DIR/post_synth.dcp
+INFO: [Timing 38-480] Writing timing data to binary archive.
+Write ShapeDB Complete: Time (s): cpu = 00:00:00.07 ; elapsed = 00:00:00.02 . Memory (MB): peak = 2796.809 ; gain = 0.000 ; free physical = 578 ; free virtual = 4818
+INFO: [Common 17-1381] The checkpoint '/home/caio/Documents/Mestrado/SVD_FPGA/work/output/post_synth.dcp' has been generated.
+# puts "Synthesis done."
+Synthesis done.
+INFO: [Common 17-206] Exiting Vivado at Sun Jun 14 22:08:51 2026...

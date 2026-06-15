@@ -1,0 +1,24 @@
+#-----------------------------------------------------------
+# Vivado v2025.2 (64-bit)
+# SW Build 6299465 on Fri Nov 14 12:34:56 MST 2025
+# IP Build 6300035 on Fri Nov 14 10:48:45 MST 2025
+# SharedData Build 6298862 on Thu Nov 13 04:50:51 MST 2025
+# Start of session at: Sun Jun 14 21:49:11 2026
+# Process ID         : 18446
+# Current directory  : /home/caio/Documents/Mestrado/SVD_FPGA/work
+# Command line       : vivado -mode batch -source ../scripts/synth.tcl -log output/synth.log -journal output/synth.jou
+# Log file           : /home/caio/Documents/Mestrado/SVD_FPGA/work/output/synth.log
+# Journal file       : /home/caio/Documents/Mestrado/SVD_FPGA/work/output/synth.jou
+# Running On         : caio
+# Platform           : Ubuntu
+# Operating System   : Ubuntu 24.04.4 LTS
+# Processor Detail   : AMD Ryzen 5 4600H with Radeon Graphics
+# CPU Frequency      : 2733.845 MHz
+# CPU Physical cores : 6
+# CPU Logical cores  : 12
+# Host memory        : 7709 MB
+# Swap memory        : 4294 MB
+# Total Virtual      : 12004 MB
+# Available Virtual  : 6852 MB
+#-----------------------------------------------------------
+source ../scripts/synth.tcl

@@ -89,13 +89,13 @@ fig.show()
 
 
 # Matrix formatting with zero padding:
-def format_W(W,R):
-    n_pad = W.shape[0] % R
-    W_pad = np.zeros(int(W.shape[0] + (R - n_pad)))
+def format_W(W,C):
+    n_pad = W.shape[0] % C
+    W_pad = np.zeros(int(W.shape[0] + (C - n_pad)))
     W_pad[:W.shape[0]] = W
-    C = W_pad.shape[0]/R
+    R = W_pad.shape[0]/C
     lower_dim = min(R,C)
-    return  W_pad.reshape((int(lower_dim),-1),order = 'F')
+    return  W_pad.reshape(-1,(int(lower_dim)),order = 'F')
 
 # FIRSVD Implementation: 
 class FIRSVDFilterPy(FIR):
@@ -161,7 +161,7 @@ def gen_wsec_wfbk_filters(firmem):
 """
 Calculate and organize filter weights for SVD
 """
-def gen_SVD_weights(weights,num_coef):
+def gen_SVD_weights(weights,num_coef, C_size = 0):
     """
     Args:
         weights (array): Array of filters weights
@@ -170,7 +170,7 @@ def gen_SVD_weights(weights,num_coef):
     
     #Will assume the most squared matrix for the weights
     full_size = len(weights)
-    C_chosen_s = int(np.sqrt(full_size))
+    C_chosen_s = C_size if C_size != 0 else int(np.sqrt(full_size))
 
     W = format_W(weights,C_chosen_s)
     print(f'{W.shape = }')
@@ -209,7 +209,7 @@ mu = 0.01
 wsecimpulse , wfbkimpulse = gen_wsec_wfbk_filters(firmem)
 print(wsecimpulse.shape,wfbkimpulse.shape)
 filter_size = 256
-C_weights_sec,R_weights_sec = gen_SVD_weights(wsecimpulse,filter_size)
+C_weights_sec,R_weights_sec = gen_SVD_weights(wsecimpulse,filter_size,C_size = 64)
 print(C_weights_sec.shape,R_weights_sec.shape)
 
 svd_filter_py = FIRSVDFilterPy(C_weights_sec,R_weights_sec)
@@ -296,6 +296,8 @@ fig.add_scatter(y = Us_q[0,:], name="Us b=0")
 fig.show()
 matrix_to_sv_hex(Vt_q, "VT")
 matrix_to_sv_hex(Us_q, "US")
+
+
 # %%
 #Load results.txt file and plot
 df = pd.read_csv("../work/results.txt", skipinitialspace=True)
@@ -312,7 +314,7 @@ plot_fft_onesided(y,fs=400)
 def norm(x):
    return x/np.max(np.abs(x))
 fig = px.line()
-fig.add_scatter(y = norm(FIR_w), name="y python")
+fig.add_scatter(y = norm(FIR_w), name="y python",line=dict(width=5))
 fig.add_scatter(y = norm(df['y']), name="y FPGA")
 #fig.add_scatter(y = norm(y) - norm(df['y']) , name="Error")
 
@@ -334,7 +336,7 @@ matrix_to_sv_hex(FIR_w, "W")
 print(FIR_w)
 # %%
 
-def weights_to_hex(weights: np.ndarray, filename: str, width: int = 8) -> None:
+def weights_to_hex(weights: np.ndarray, filename: str, width: int = 8, quant:bool =False) -> None:
     """
     Quantize a numpy array of filter weights and write to a .hex file
     for use with $readmemh in SystemVerilog.
@@ -344,15 +346,18 @@ def weights_to_hex(weights: np.ndarray, filename: str, width: int = 8) -> None:
         filename : output .hex file path
         width    : bit width of each coefficient (default 8)
     """
-    max_val = np.max(np.abs(weights))
-    scale   = (2**(width-1) - 1) / max_val if max_val != 0 else 1.0
+    if not quant :
+        max_val = np.max(np.abs(weights))
+        scale   = (2**(width-1) - 1) / max_val if max_val != 0 else 1.0
 
-    quantized = np.clip(
-        np.round(weights.flatten() * scale),
-        -(2**(width-1)),
-         (2**(width-1)) - 1
-    ).astype(np.int8 if width <= 8 else np.int16)
+        quantized = np.clip(
+            np.round(weights.flatten() * scale),
+            -(2**(width-1)),
+            (2**(width-1)) - 1
+        ).astype(np.int8 if width <= 8 else np.int16)
 
+    else :
+        quantized = weights
     hex_digits = width // 4  # nibbles per value
 
     with open(filename, "w") as f:
@@ -361,7 +366,7 @@ def weights_to_hex(weights: np.ndarray, filename: str, width: int = 8) -> None:
             f.write(f"{int(v) & (2**width - 1):0{hex_digits}X}\n")
 
     print(f"Written {filename} — {len(quantized)} entries "
-          f"(scale={scale:.4f}, range=[{quantized.min()}, {quantized.max()}])")
+          f" range=[{quantized.min()}, {quantized.max()}])")
 
 
 # %%
@@ -370,4 +375,10 @@ weights_to_hex(FIR_w , "../weights/FIR_weights.hex" , width=16)
 # %%
 import os
 print(os.getcwd())
+# %%
+
+weights_to_hex(Vt_q[0,:],"../weights/B0VT_weights.hex",width=16,quant=True)
+weights_to_hex(Vt_q[1,:],"../weights/B1VT_weights.hex",width=16,quant=True)
+weights_to_hex(Us_q[0,:],"../weights/B0US_weights.hex",width=16,quant=True)
+weights_to_hex(Us_q[1,:],"../weights/B1US_weights.hex",width=16,quant=True)
 # %%

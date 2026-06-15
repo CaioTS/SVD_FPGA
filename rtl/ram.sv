@@ -6,10 +6,10 @@ module ram#(
     input write_enable,
     input [$clog2(DEPTH)-1:0]address,
     input [WIDTH-1:0]data_in,
-    output reg [WIDTH-1:0]data_out
+    output reg signed [WIDTH-1:0]data_out
 );
 
-reg [WIDTH - 1:0]ram_block[0:DEPTH-1];
+(* ram_style = "distributed" *) reg [WIDTH - 1:0]ram_block[0:DEPTH-1];
 
 always @(posedge clk) begin
         if(write_enable)

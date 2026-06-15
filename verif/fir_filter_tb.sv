@@ -22,6 +22,9 @@ module fir_filter_tb;
 
     integer idx;
 
+    reg load_weight;
+    reg signed [WIDTH -1: 0] weight;
+    reg [$clog2((R)*C)-1:0] load_weight_addr;
     // ─────────────────────────────────────────────
     // Clock Generation
     // clk   : 10ns period (50 MHz)
@@ -37,24 +40,51 @@ module fir_filter_tb;
     // ─────────────────────────────────────────────
     // DUT Instantiation
     // ─────────────────────────────────────────────
-    fir_filter #(
-        .WIDTH (WIDTH),
-        .B     (B),
-        .C     (C),
-        .R     (R)
-    ) dut (
+    fir_filter
+        #(
+        .WIDTH(WIDTH),
+        .B(B),
+        .C(C),
+        .R(R)
+        )
+         dut (
         .clk   (clk),
         .reset (reset),
         .x_clk (x_clk),
         .x     (x),
         .y     (y),
-        .y_done(y_done)
+        .y_done(y_done),
+
+        .load_weight(load_weight),
+        .weight(weight),
+        .load_weight_addr(load_weight_addr)
     );
 
     // ─────────────────────────────────────────────
     // Tasks
     // ─────────────────────────────────────────────
 
+    logic signed [WIDTH-1:0] W_param [0:(R*C)-1];
+    task load_weights;
+        begin
+        
+        $readmemh("../weights/FIR_weights.hex", W_param);
+
+        load_weight = 1'b1;
+
+        #100us;
+        @ (posedge clk);
+        for (int i = 0; i< R*C ; i++) begin
+            load_weight_addr <= i;
+            weight <= W_param[i];
+            @(posedge clk);
+        end
+
+        #100us;
+        load_weight = 1'b0;
+        @(posedge clk);
+        end
+    endtask
     // Apply reset
     task apply_reset;
         begin
@@ -115,11 +145,13 @@ logic ignore_first_sample;
     end
 
     always @(posedge y_done) begin
-        if (!ignore_first_sample) ignore_first_sample = 1;
-        else begin $display("Output y = %d  (x = %d)", y, sample_mem[sample_idx - 1]);
-            $fdisplay(fd, "%0d, %0d, %0d", sample_idx - 1, sample_mem[sample_idx - 1], y);
+        if (!load_weight) begin
+            if (!ignore_first_sample) ignore_first_sample = 1;
+            else begin $display("Output y = %d  (x = %d)", y, sample_mem[sample_idx - 1]);
+                $fdisplay(fd, "%0d, %0d, %0d", sample_idx - 1, sample_mem[sample_idx - 1], y);
+            end
+            sample_idx <= sample_idx + 1;
         end
-        sample_idx <= sample_idx + 1;
     end
 
     // Close file cleanly at end of simulation
@@ -160,6 +192,10 @@ logic ignore_first_sample;
         //end
 
         x_clk_en = 1;
+
+        load_weights();
+
+
         for ( i = 0; i < N_SAMPLES; i++) begin
         send_sample(sample_mem[i]);
         end

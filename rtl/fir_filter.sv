@@ -2,14 +2,18 @@ module fir_filter #(
     parameter WIDTH = 16,
     parameter B     = 2,   // branches
     parameter C     = 80,  // Vt columns  (x buffer depth)
-    parameter R     = 80   // Us rows     (m buffer depth)
+    parameter R     = 80  // Us rows     (m buffer depth)
 )(
     input  clk,
     input  reset,
     input  x_clk,
     input  [WIDTH-1:0] x,
     output [WIDTH-1:0] y,
-    output signed y_done
+    output signed y_done,
+
+    input load_weight,
+    input [WIDTH -1: 0] weight,
+    input [$clog2((R)*C)-1:0] load_weight_addr
 );
 
     wire x_wr_en;
@@ -30,7 +34,7 @@ module fir_filter #(
     );
 
     always @ (posedge clk) begin
-        x_din <= x;
+        x_din <= !load_weight ? x : 0;
     end
 
 
@@ -50,7 +54,6 @@ module fir_filter #(
     assign x_wr_en = sync_ff2 & ~sync_ff3; 
 
     logic read_done;
-    reg signed [WIDTH-1:0] W [0:(C*R)-1];   // left-singular * sigma   (R coefficients)
 
     sparser #(
         .N(C*R),
@@ -74,14 +77,15 @@ module fir_filter #(
         .clk(clk),
         .rst_n(reset),
         .start(x_wr_en),
-        .A(W),
+        //.A(W),
         .X(x_dout),
         .Y(y),
-        .calc_done(y_done)
+        .calc_done(y_done),
+
+        .load_weight(load_weight),
+        .load_weight_addr(load_weight_addr),
+        .weight(weight)
+
     );  
 
-
-
-
-initial $readmemh("../weights/FIR_weights.hex",W);
 endmodule

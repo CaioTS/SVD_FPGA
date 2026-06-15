@@ -1,0 +1,96 @@
+#-----------------------------------------------------------
+# Vivado v2025.2 (64-bit)
+# SW Build 6299465 on Fri Nov 14 12:34:56 MST 2025
+# IP Build 6300035 on Fri Nov 14 10:48:45 MST 2025
+# SharedData Build 6298862 on Thu Nov 13 04:50:51 MST 2025
+# Start of session at: Sun Jun 14 22:06:52 2026
+# Process ID         : 21898
+# Current directory  : /home/caio/Documents/Mestrado/SVD_FPGA/work
+# Command line       : vivado -mode batch -source ../scripts/synth.tcl -log output/synth.log -journal output/synth.jou
+# Log file           : /home/caio/Documents/Mestrado/SVD_FPGA/work/output/synth.log
+# Journal file       : /home/caio/Documents/Mestrado/SVD_FPGA/work/output/synth.jou
+# Running On         : caio
+# Platform           : Ubuntu
+# Operating System   : Ubuntu 24.04.4 LTS
+# Processor Detail   : AMD Ryzen 5 4600H with Radeon Graphics
+# CPU Frequency      : 2664.140 MHz
+# CPU Physical cores : 6
+# CPU Logical cores  : 12
+# Host memory        : 7709 MB
+# Swap memory        : 4294 MB
+# Total Virtual      : 12004 MB
+# Available Virtual  : 6646 MB
+#-----------------------------------------------------------
+source ../scripts/synth.tcl
+# set PART    "xc7z007sclg225-2"
+# set TOP     "fir_filter"    
+# set RTL_DIR "../rtl"
+# set OUT_DIR "./output"
+# set WIDTH 16
+# set B      2
+# set C      80
+# set R      80
+# set opts "-flatten_hierarchy none -max_dsp 0"
+# file mkdir $OUT_DIR
+# read_verilog -sv [glob $RTL_DIR/*.sv]
+# read_xdc ../constraints/Zybo-Z7-Master.xdc
+# synth_design -top $TOP -part $PART \
+# -generic WIDTH=$WIDTH \
+# -generic B=$B \
+# -generic C=$C \
+# -generic R=$R \
+# {*}$opts
+Command: synth_design -top fir_filter -part xc7z007sclg225-2 -generic WIDTH=16 -generic B=2 -generic C=80 -generic R=80 -flatten_hierarchy none -max_dsp 0
+Starting synth_design
+Attempting to get a license for feature 'Synthesis' and/or device 'xc7z007s'
+INFO: [Common 17-349] Got license for feature 'Synthesis' and/or device 'xc7z007s'
+INFO: [Vivado_Tcl 4-287] User specified maximum number of block DSP allowed in design is 0
+INFO: [Device 21-403] Loading part xc7z007sclg225-2
+INFO: [Synth 8-7079] Multithreading enabled for synth_design using a maximum of 7 processes.
+INFO: [Synth 8-7078] Launching helper process for spawning children vivado processes
+INFO: [Synth 8-7075] Helper process launched with PID 21934
+---------------------------------------------------------------------------------
+Starting RTL Elaboration : Time (s): cpu = 00:00:04 ; elapsed = 00:00:04 . Memory (MB): peak = 2208.914 ; gain = 482.156 ; free physical = 895 ; free virtual = 5109
+---------------------------------------------------------------------------------
+WARNING: [Synth 8-6901] identifier 'WIDTH' is used before its declaration [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/fir_filter_wrapper.sv:5]
+WARNING: [Synth 8-6901] identifier 'WIDTH' is used before its declaration [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/fir_filter_wrapper.sv:6]
+WARNING: [Synth 8-6901] identifier 'WIDTH' is used before its declaration [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/fir_filter_wrapper.sv:10]
+WARNING: [Synth 8-6901] identifier 'R' is used before its declaration [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/fir_filter_wrapper.sv:11]
+WARNING: [Synth 8-6901] identifier 'C' is used before its declaration [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/fir_filter_wrapper.sv:11]
+INFO: [Synth 8-6157] synthesizing module 'fir_filter' [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/fir_filter.sv:1]
+	Parameter WIDTH bound to: 16 - type: integer 
+	Parameter B bound to: 2 - type: integer 
+	Parameter C bound to: 80 - type: integer 
+	Parameter R bound to: 80 - type: integer 
+INFO: [Synth 8-6157] synthesizing module 'circ_buf' [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/circ_buf.sv:12]
+	Parameter WIDTH bound to: 16 - type: integer 
+	Parameter DEPTH bound to: 6400 - type: integer 
+INFO: [Synth 8-6157] synthesizing module 'ram' [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/ram.sv:1]
+	Parameter WIDTH bound to: 16 - type: integer 
+	Parameter DEPTH bound to: 6400 - type: integer 
+INFO: [Synth 8-6155] done synthesizing module 'ram' (0#1) [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/ram.sv:1]
+INFO: [Synth 8-155] case statement is not full and has no default [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/circ_buf.sv:94]
+INFO: [Synth 8-6155] done synthesizing module 'circ_buf' (0#1) [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/circ_buf.sv:12]
+INFO: [Synth 8-6157] synthesizing module 'sparser' [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/sparser.sv:1]
+	Parameter N bound to: 6400 - type: integer 
+	Parameter DELTA bound to: 1 - type: integer 
+INFO: [Synth 8-155] case statement is not full and has no default [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/sparser.sv:84]
+INFO: [Synth 8-6155] done synthesizing module 'sparser' (0#1) [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/sparser.sv:1]
+INFO: [Synth 8-6157] synthesizing module 'multiplier' [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/multiplier.sv:1]
+	Parameter N bound to: 6400 - type: integer 
+	Parameter WIDTH bound to: 16 - type: integer 
+	Parameter GUARD bound to: 0 - type: integer 
+INFO: [Synth 8-155] case statement is not full and has no default [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/multiplier.sv:100]
+INFO: [Synth 8-6155] done synthesizing module 'multiplier' (0#1) [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/multiplier.sv:1]
+INFO: [Synth 8-6155] done synthesizing module 'fir_filter' (0#1) [/home/caio/Documents/Mestrado/SVD_FPGA/rtl/fir_filter.sv:1]
+INFO: [Common 17-41] Interrupt caught. Command should exit soon.
+INFO: [Common 17-41] Interrupt caught. Command should exit soon.
+1
+INFO: [Common 17-83] Releasing license: Synthesis
+22 Infos, 5 Warnings, 0 Critical Warnings and 1 Errors encountered.
+synth_design failed
+synth_design: Time (s): cpu = 00:00:11 ; elapsed = 00:00:09 . Memory (MB): peak = 2295.883 ; gain = 685.758 ; free physical = 940 ; free virtual = 5156
+INFO: [Common 17-2834] synth_design peak Physical Memory [PSS] (MB): overall = 1737.420; main = 1737.420; forked = 0.000
+INFO: [Common 17-2834] synth_design peak Virtual Memory [VSS] (MB): overall = 2295.887; main = 2295.887; forked = 0.000
+INFO: [Common 17-344] 'source' was cancelled
+INFO: [Common 17-206] Exiting Vivado at Sun Jun 14 22:07:06 2026...

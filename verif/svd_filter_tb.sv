@@ -7,8 +7,8 @@ module svd_filter_tb;
     // ─────────────────────────────────────────────
     parameter WIDTH = 16;
     parameter B     = 2;
-    parameter C     = 81;
-    parameter R     = 80;
+    parameter C     = 64;
+    parameter R     = 101;
 
     // ─────────────────────────────────────────────
     // DUT Signals
@@ -21,6 +21,11 @@ module svd_filter_tb;
     wire signed [WIDTH:0]     y;
 
     integer idx;
+
+
+    reg load_weight;
+    reg signed [WIDTH -1: 0] weight;
+    reg [$clog2(B) + 1 + $clog2($max(R,C))-1:0] load_weight_addr;
 
     // ─────────────────────────────────────────────
     // Clock Generation
@@ -37,23 +42,97 @@ module svd_filter_tb;
     // ─────────────────────────────────────────────
     // DUT Instantiation
     // ─────────────────────────────────────────────
-    svd_filter #(
-        .WIDTH (WIDTH),
-        .B     (B),
-        .C     (C),
-        .R     (R)
-    ) dut (
+    svd_filter
+        #(
+        .WIDTH(WIDTH),
+        .B(B),
+        .C(C),
+        .R(R)
+        )
+    dut (
         .clk   (clk),
-        .reset (reset),
+        .reset (reset),   
         .x_clk (x_clk),
         .x     (x),
         .y     (y),
-        .y_done(y_done)
+        .y_done(y_done),
+
+        .load_weight(load_weight),
+        .weight(weight),
+        .load_weight_addr(load_weight_addr)
     );
 
     // ─────────────────────────────────────────────
     // Tasks
     // ─────────────────────────────────────────────
+
+
+    logic signed [WIDTH-1:0] B0_VT [0:(C)-1];
+    logic signed [WIDTH-1:0] B0_US [0:(R)-1];
+
+    logic signed [WIDTH-1:0] B1_VT [0:(C)-1];
+    logic signed [WIDTH-1:0] B1_US [0:(R)-1];
+
+    logic [1:0] sel;
+    task load_weights;
+        begin
+        
+        $readmemh("../weights/B0US_weights.hex", B0_US);
+        $readmemh("../weights/B0VT_weights.hex", B0_VT);
+        $readmemh("../weights/B1US_weights.hex", B1_US);
+        $readmemh("../weights/B1VT_weights.hex", B1_VT);
+
+        load_weight = 1'b1;
+
+        #100us;
+        @ (posedge clk);
+
+        for (int i = 0; i < C; i ++) begin
+            //B0 is branch = 0 and selector = 1 so 10
+            sel = 2'b00;
+            weight <= B0_VT[i];
+            load_weight_addr <= {sel,$clog2($max(R,C))'(i)};
+            @ (posedge clk);
+        end
+
+        for (int i = 0; i < R; i ++) begin
+            //B0 is branch = 0 and selector = 1 so 10
+            sel = 2'b01;
+            weight <= B0_US[i];
+            load_weight_addr <= {sel,$clog2($max(R,C))'(i)};
+            @ (posedge clk);
+        end
+
+        for (int i = 0; i < C; i ++) begin
+            //B0 is branch = 0 and selector = 1 so 10
+            sel = 2'b10;
+            weight <= B1_VT[i];
+            load_weight_addr <= {sel,$clog2($max(R,C))'(i)};
+            @ (posedge clk);
+        end
+
+        for (int i = 0; i < R; i ++) begin
+            //B0 is branch = 0 and selector = 1 so 10
+            sel = 2'b11;
+            weight <= B1_US[i];
+            load_weight_addr <= {sel,$clog2($max(R,C))'(i)};
+            @ (posedge clk);
+        end
+
+        /*for (int i = 0; i< R*C ; i++) begin
+            load_weight_addr <= i;
+            weight <= W_param[i];
+            @(posedge clk);
+        end
+        */
+        load_weight = 1'b0;
+        load_weight_addr = 0;
+        load_weight = 0;
+        #100us;
+        @(posedge clk);
+        end
+    endtask
+
 
     // Apply reset
     task apply_reset;
@@ -135,9 +214,9 @@ logic ignore_first_sample;
             $dumpvars(0, dut.x_buf.uut.ram_block[idx]); 
             end
         */
-        for (idx = 0; idx< C; idx = idx +1) $dumpvars(0, dut.b_0.Vt[idx]);
+        //for (idx = 0; idx< C; idx = idx +1) $dumpvars(0, dut.b_0.Vt[idx]);
             
-        for (idx = 0; idx< R; idx = idx +1) $dumpvars(0, dut.b_0.Us[idx]);
+        //for (idx = 0; idx< R; idx = idx +1) $dumpvars(0, dut.b_0.Us[idx]);
         
         $dumpvars(0);
 
@@ -155,6 +234,8 @@ logic ignore_first_sample;
             $display("FAIL: y = %0d after reset (expected 0)", y);
 
         
+        load_weights();
+
         //for ( i=0 ;i <80*81 ; i++)begin
         //    send_sample(0);
         //end

@@ -6,17 +6,22 @@ module multiplier #(
     input  logic                    clk,
     input  logic                    rst_n,
     input  logic                    start,
-    input  logic signed [WIDTH-1:0]        A [0:N-1],  // Coefficient vector
     input  logic signed [WIDTH-1:0]        X,            // Input sample — hold stable for full computation
     output logic signed [WIDTH-1:0]        Y,            // Filter output (upper WIDTH bits of accumulator)
-    output logic                    calc_done
+    output logic                    calc_done,
+
+    input load_weight,
+    input [$clog2(N)-1:0] load_weight_addr,
+    input [WIDTH-1:0 ]weight
 );
 
+    logic signed [WIDTH-1: 0] A;
     // -------------------------------------------------------------------------
     // Internal registers
     // -------------------------------------------------------------------------
-    logic [1:0]                    wait_cnt;     // fix #7: 2-bit → exits after 2 increments
-    logic [$clog2(N)-1:0]          tap_index;    // fix #2 #10: $clog2(N)-1, holds 0..N-1
+    logic [1:0]                    wait_cnt;     
+    logic [$clog2(N)-1:0]          tap_index;
+    logic [$clog2(N)-1:0]          ram_address;    
     logic signed [WIDTH-1:0]       a_reg, x_reg;
     logic signed [2*WIDTH-1:0]     product;
     logic signed [2*WIDTH+GUARD:0] accumulator;  // extra GUARD bits for N additions
@@ -120,7 +125,7 @@ end
 
                 LOAD_ACC: begin
                     x_reg    <= X;  
-                    a_reg      <= A[tap_index];
+                    a_reg      <= A;
                     tap_index   <= tap_index + 1'b1;
                     accumulator <= accumulator + product;  
                 end
@@ -140,4 +145,19 @@ end
 
 //assign Y = y_reg[2*WIDTH+GUARD : WIDTH + GUARD];
 assign Y = y_reg[WIDTH-1 + 8: 8];
+
+
+
+assign ram_address = load_weight ? load_weight_addr : tap_index;
+ram #(
+    .WIDTH (WIDTH),
+    .DEPTH (N)
+    )  VT_w(
+    .clk(clk),
+    .write_enable(load_weight),
+    .address(ram_address),
+    .data_in(weight),
+    .data_out(A)
+    );
+
 endmodule
