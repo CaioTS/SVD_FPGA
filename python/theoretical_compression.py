@@ -175,4 +175,3 @@ fig.update_yaxes(title_text='Number of Operations', row=1, col=3)
 
 # Show the figure
 fig.show()
-# %%

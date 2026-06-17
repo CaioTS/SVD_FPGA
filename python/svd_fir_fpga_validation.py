@@ -454,23 +454,24 @@ weights_to_hex(FIR_w, "../weights/FIR_weights.hex", width=16)
 # Loads results.txt written by the SystemVerilog testbench and compares
 # the FPGA output against the Python reference via time-domain and FFT plots.
 
-df = pd.read_csv("../work/results.txt", skipinitialspace=True)
+df_svd = pd.read_csv("../work/SVD_results.txt", skipinitialspace=True)
+df_fir = pd.read_csv("../work/FIR_results.txt", skipinitialspace=True)
 
 fig = px.line()
-fig.add_scatter(y=df['y'], name="y FPGA")
+fig.add_scatter(y=df_svd['y'], name="y SVD FPGA")
 fig.update_layout(title="FPGA Output")
 fig.show()
 
-plot_fft_onesided(df['y'], fs=400, title="FFT — FPGA Output")
+plot_fft_onesided(df_svd['y'], fs=400, title="FFT — SVD FPGA Output")
 plot_fft_onesided(y,       fs=400, title="FFT — Python Reference")
 
 fig = px.line()
 
 fig.add_scatter(y=norm(FIR_w),   name="FIR weights (Python)",  line=dict(width=5))
-fig.add_scatter(y=norm(df['y']), name="FPGA output")
+fig.add_scatter(y=norm(df_svd['y']), name="SVD FPGA output")
 fig.add_scatter(y=norm(SVD_py_output), name="SVD weights (Python)")
 
-fig.add_scatter(y = norm(df['y']) - norm(SVD_py_output), name= "Error SVD (FPGA - Python)")
+fig.add_scatter(y = norm(df_svd['y']) - norm(SVD_py_output), name= "Error SVD (FPGA - Python)")
 
 fig.update_layout(title="Python vs FPGA — Normalized Comparison")
 fig.show()

@@ -21,6 +21,7 @@ module fir_filter_tb;
     wire signed [WIDTH-1:0]     y;
 
     integer idx;
+    integer cycle_cnt;
 
     reg load_weight;
     reg signed [WIDTH -1: 0] weight;
@@ -30,7 +31,10 @@ module fir_filter_tb;
     // clk   : 10ns period (50 MHz)
     // x_clk :  period (400 Hz) — Much Slower
     // ─────────────────────────────────────────────
-    initial clk = 0;
+    initial begin 
+        clk = 0;
+        cycle_cnt = 0;    
+    end
     always #5  clk   = ~clk; 
 
     initial x_clk = 0;
@@ -63,6 +67,11 @@ module fir_filter_tb;
     // ─────────────────────────────────────────────
     // Tasks
     // ─────────────────────────────────────────────
+
+    //Cycle counter 
+    always @ (posedge x_clk)cycle_cnt = 0;
+    always @ (posedge clk) cycle_cnt = cycle_cnt+1;
+    //
 
     logic signed [WIDTH-1:0] W_param [0:(R*C)-1];
     task load_weights;
@@ -136,19 +145,19 @@ integer fd;
 integer sample_idx;
 logic ignore_first_sample;
     initial begin
-        fd = $fopen("results.txt", "w");
+        fd = $fopen("FIR_results.txt", "w");
         if (fd == 0) begin
             $display("ERROR: could not open results.txt");
             $finish;
         end
-        $fdisplay(fd, "idx, x, y");  // CSV header
+        $fdisplay(fd, "idx, x, y, cycle_cnt");  // CSV header
     end
 
     always @(posedge y_done) begin
         if (!load_weight) begin
             if (!ignore_first_sample) ignore_first_sample = 1;
             else begin $display("Output y = %d  (x = %d)", y, sample_mem[sample_idx - 1]);
-                $fdisplay(fd, "%0d, %0d, %0d", sample_idx - 1, sample_mem[sample_idx - 1], y);
+                $fdisplay(fd, "%0d, %0d, %0d ,%0d", sample_idx - 1, sample_mem[sample_idx - 1], y, cycle_cnt);
             end
             sample_idx <= sample_idx + 1;
         end
