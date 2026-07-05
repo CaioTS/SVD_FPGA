@@ -168,7 +168,7 @@ def gen_wsec_wfbk_filters(firmem):
     return wsecimpulse, wfbkimpulse
 
 
-def gen_SVD_weights(weights, num_coef, C_size=0):
+def gen_SVD_weights(weights, num_coef, C_size=0, plot_S=False):
     """
     Decompose a FIR filter weight vector using SVD and extract
     branch weights (C_weights, R_weights) for a given number of
@@ -201,6 +201,12 @@ def gen_SVD_weights(weights, num_coef, C_size=0):
         C_weights[i, :] = VT.T[:, i]
         R_weights[i, :] = US[:, i]
 
+    if (plot_S):
+        fig = px.line(log_y=True)
+        fig.add_scatter(y=S)
+        fig.update_layout(title="Singular Values")
+
+        fig.show()
     return C_weights, R_weights
 
 
@@ -323,11 +329,13 @@ class FIRSVDFilterPy(FIR):
         self.vdot = C_weights
         self.inputbuffer = np.zeros(self.N)
         self.util = [FIR(R_weights[k, :]) for k in range(self.B)]
+        self.youts_outs = []
         self.reset()
 
     def reset(self):
         self.y = 0
         self.inputbuffer[:] = 0.0
+        self.youts_outs = [] 
         for k in range(self.B):
             self.util[k].reset()
 
@@ -338,6 +346,7 @@ class FIRSVDFilterPy(FIR):
         for k in range(self.B):
             self.youts[k] = self.util[k].filterstep(self.youts[k])
         self.y = np.sum(self.youts)
+        self.youts_outs.append(self.youts)
         return self.y
 
 # %%
@@ -351,8 +360,8 @@ class FIRSVDFilterPy(FIR):
 wsecimpulse, wfbkimpulse = gen_wsec_wfbk_filters(firmem)
 print(wsecimpulse.shape, wfbkimpulse.shape)
 
-filter_size = 256
-C_weights_sec, R_weights_sec = gen_SVD_weights(wsecimpulse, filter_size, C_size=64)
+filter_size = 6400
+C_weights_sec, R_weights_sec = gen_SVD_weights(wsecimpulse, filter_size, C_size=64, plot_S=True)
 print(f"Vt shape: {C_weights_sec.shape}  Us shape: {R_weights_sec.shape}")
 
 # Quantize with a shared scale so relative magnitudes are preserved
@@ -476,6 +485,83 @@ fig.add_scatter(y = norm(df_svd['y']) - norm(SVD_py_output), name= "Error SVD (F
 fig.update_layout(title="Python vs FPGA — Normalized Comparison")
 fig.show()
 
+print (f"Number of cycles Compression \n")
+print (f"SVD num cycles per operation: {df_svd["cycle_cnt"][0]}")
+print (f"FIR num cycles per operation: {df_fir["cycle_cnt"][0]}")
+print (f"Num cycles per operation compression: {100*df_fir["cycle_cnt"][0]/df_svd["cycle_cnt"][0]}x")
+print("-------------------------------------------------------------------------------")
+print("This SVD is composed of 2 branches, with 2 DSPs per branch.\n" \
+"The number of cycles for a FIR filter with four DSPs would be\naround 4x less than" \
+" the simulated one with one DSP only. ")
 
+print(f"Num cycles per operation compression FIR w/4DSP: {100*df_fir["cycle_cnt"][0]/(4*df_svd["cycle_cnt"][0])}x")
+
+# %%
+# Run fft for individual branches, check if 2 branch per mode is visible
+
+svd_outs = np.array(svd_filter_py.youts_outs)
+
+plot_fft_onesided(y, fs=400, title=f"FFT — Python SVD Filter Output")
+
+
+for i in range(svd_outs.shape[1]) :
+    plot_fft_onesided(svd_outs[:,i], fs=400, title=f"FFT — Python SVD Filter Output Branch {i}")
+
+
+# %%
+# =============================================================================
+# SVD SPECTRUM ANALYSIS USING LAGGED MATRICE
+# =============================================================================
+#Compress filter to around 2400 taps
+mem = 2400
+wsecimpulse, _ = gen_wsec_wfbk_filters(mem)
+plot_fft_onesided(wsecimpulse , fs= 400, title="FFT secondary path")
+# Create lagged matrice
+L = 1200
+K = mem - L + 1
+wsec_lagged = np.zeros((L,K))
+for l in range(L):
+    for k in range(K):
+        wsec_lagged[l,k] = wsecimpulse[l + k]
+#Make SVD of lagged vector
+U, S, VT = np.linalg.svd(wsec_lagged)
+print(U.shape , S.shape , VT.shape)
+fig = go.Figure()
+fig.add_trace(go.Scatter(
+    y=S,
+    mode="lines"
+))
+fig.update_layout(
+        title="EigenValues of SVD on Lagged secondary filter"
+)
+fig.show()
+# %%
+
+SM = np.zeros((L, K))
+np.fill_diagonal(SM, S)
+US = U @ SM
+B_s = 6
+C_weights = np.zeros((B_s, VT.shape[1]))
+R_weights = np.zeros((B_s, U.shape[0]))
+for i in range(B_s):
+    C_weights[i, :] = VT.T[:, i]
+    R_weights[i, :] = US[:, i]
+
+svd_lagged = FIRSVDFilterPy(C_weights, R_weights)
+svd_lagged.reset()
+
+x = np.zeros(1000)
+x[0] = 1.0
+y = np.zeros_like(x)
+for i, sample in enumerate(x):
+    y[i] = svd_lagged.filterstep(sample)
+
+svd_laggd_output = y
+svd_lagged_outs = np.array(svd_lagged.youts_outs)
+
+# %%
+plot_fft_onesided(y, fs=400, title=f"FFT — Python SVD Filter Output")
+for i in range(svd_lagged_outs.shape[1]) :
+    plot_fft_onesided(svd_lagged_outs[:,i], fs=400, title=f"FFT — Python SVD Filter Output Branch {i}")
 
 # %%
