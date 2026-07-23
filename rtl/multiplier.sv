@@ -1,31 +1,34 @@
 module multiplier #(
     parameter N     = 10,  // Number of samples (taps)
-    parameter WIDTH = 8,
-    parameter GUARD = 4    // log2(N) guard bits to prevent accumulator overflow
+    parameter X_WIDTH = 8,
+    parameter W_WIDTH = 8,
+    parameter Y_WIDTH = 8,
+    parameter GUARD = $clog2(N)    // log2(N) guard bits to prevent accumulator overflow
 )(
     input  logic                    clk,
     input  logic                    rst_n,
     input  logic                    start,
-    input  logic signed [WIDTH-1:0]        X,            // Input sample — hold stable for full computation
-    output logic signed [WIDTH-1:0]        Y,            // Filter output (upper WIDTH bits of accumulator)
+    input  logic signed [X_WIDTH-1:0]        X,            // Input sample — hold stable for full computation
+    output logic signed [Y_WIDTH-1:0]        Y,            // Filter output (upper WIDTH bits of accumulator)
     output logic                    calc_done,
 
     input load_weight,
     input [$clog2(N)-1:0] load_weight_addr,
-    input [WIDTH-1:0 ]weight
+    input [W_WIDTH-1:0 ]weight
 );
 
-    logic signed [WIDTH-1: 0] A;
+    logic signed [W_WIDTH-1: 0] A;
     // -------------------------------------------------------------------------
     // Internal registers
     // -------------------------------------------------------------------------
     logic [1:0]                    wait_cnt;     
     logic [$clog2(N)-1:0]          tap_index;
     logic [$clog2(N)-1:0]          ram_address;    
-    logic signed [WIDTH-1:0]       a_reg, x_reg;
-    logic signed [2*WIDTH-1:0]     product;
-    logic signed [2*WIDTH+GUARD:0] accumulator;  // extra GUARD bits for N additions
-    logic signed [2*WIDTH+GUARD:0] y_reg;
+    logic signed [W_WIDTH -1:  0]  a_reg;
+    logic signed [X_WIDTH -1 : 0]  x_reg;
+    logic signed [(X_WIDTH + W_WIDTH)-1:0]     product;
+    logic signed [(X_WIDTH + W_WIDTH + GUARD) -1:0] accumulator;
+    logic signed [(X_WIDTH + W_WIDTH + GUARD) -1:0] y_reg;
     // -------------------------------------------------------------------------
     // State encoding
     // -------------------------------------------------------------------------
@@ -111,10 +114,14 @@ end
                     tap_index   <= '0;
                     accumulator <= '0;
                     product     <= '0;
+                    x_reg <= '0;
+                    a_reg <= '0;  
                 end
 
                 START: begin
-                    wait_cnt <= '0;   
+                    wait_cnt <= '0;
+                    x_reg <= '0;
+                    a_reg <= '0;   
                 end
 
                 WAIT_CYCLES: begin
@@ -135,7 +142,7 @@ end
                 end
 
                 DONE: begin
-                    y_reg <= (accumulator + product);
+                    y_reg <= accumulator + product;
                     calc_done <= 1'b1;
                 end
 
@@ -143,14 +150,12 @@ end
         end
     end
 
-//assign Y = y_reg[2*WIDTH+GUARD : WIDTH + GUARD];
-assign Y = y_reg[WIDTH-1 + 8: 8];
-
+assign Y = y_reg[(X_WIDTH + W_WIDTH + GUARD) -1 -: Y_WIDTH];
 
 
 assign ram_address = load_weight ? load_weight_addr : tap_index;
 ram #(
-    .WIDTH (WIDTH),
+    .WIDTH (W_WIDTH),
     .DEPTH (N)
     )  VT_w(
     .clk(clk),

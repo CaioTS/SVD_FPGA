@@ -10,6 +10,7 @@ import plotly.graph_objects as go
 import matplotlib.pyplot as plt
 from scipy import signal
 from scipy.fft import fft, fftfreq
+from scipy.signal import chirp
 
 from CantileverBeam import CantileverBeam
 from Adaptive import FIRNLMS
@@ -51,7 +52,7 @@ cbeam = CantileverBeam(
     thickness=beamthickness,
     length=beamlength,
     Tsampling=1.0 / fs,
-    damp=dampingfactors
+    damp=dampingfactors,
 )
 cbeam.reset()
 
@@ -85,6 +86,7 @@ fig.update_layout(
     width=600, height=350
 )
 fig.show()
+
 
 # %%
 # =============================================================================
@@ -202,8 +204,8 @@ def gen_SVD_weights(weights, num_coef, C_size=0, plot_S=False):
         R_weights[i, :] = US[:, i]
 
     if (plot_S):
-        fig = px.line(log_y=True)
-        fig.add_scatter(y=S)
+        fig = px.line()
+        fig.add_scatter(y=S/np.max(S))
         fig.update_layout(title="Singular Values")
 
         fig.show()
@@ -256,7 +258,7 @@ def weights_to_hex(weights: np.ndarray, filename: str,
           f"range=[{quantized.min()}, {quantized.max()}]")
 
 
-def matrix_to_sv_hex(matrix, name, width=16):
+def matrix_to_sv_hex(matrix, name, width=8):
     """
     Print a matrix as SystemVerilog parameter hex literals.
     Columns are reversed so that flat[i*WIDTH +: WIDTH] == col[i].
@@ -360,14 +362,18 @@ class FIRSVDFilterPy(FIR):
 wsecimpulse, wfbkimpulse = gen_wsec_wfbk_filters(firmem)
 print(wsecimpulse.shape, wfbkimpulse.shape)
 
-filter_size = 6400
+#filter_size = 6400
+filter_size = 2 * (64 + 101)
 C_weights_sec, R_weights_sec = gen_SVD_weights(wsecimpulse, filter_size, C_size=64, plot_S=True)
 print(f"Vt shape: {C_weights_sec.shape}  Us shape: {R_weights_sec.shape}")
 
 # Quantize with a shared scale so relative magnitudes are preserved
 max_ov = np.max([np.max(np.abs(C_weights_sec)), np.max(np.abs(R_weights_sec))])
-Vt_q   = quantize_matrix(C_weights_sec, max_ov)
-Us_q   = quantize_matrix(R_weights_sec, max_ov)
+
+Vt_q   = quantize_matrix(C_weights_sec, np.max(np.abs(C_weights_sec)))
+Us_q   = quantize_matrix(R_weights_sec, np.max(np.abs(R_weights_sec)))
+
+
 
 fig = px.line()
 fig.add_scatter(y=Vt_q[0, :], name="Vt b=0")
@@ -412,14 +418,73 @@ plot_fft_onesided(y, fs=400, title="FFT — Python SVD Filter Output")
 # Quantizes the input sequence to 8-bit signed and writes samples.hex
 # for use with $readmemh in the testbench.
 
-SCALE     = 127.0 / np.max(np.abs(x))
-quantized = np.clip(np.round(x * SCALE), -128, 127).astype(np.int8)
+fs = 400                    # Sampling frequency (Hz)
+N = len(x)                  # Number of samples
+t = np.arange(N) / fs
 
-with open("samples.hex", "w") as f:
-    for s in quantized:
-        f.write(f"{int(s) & 0xFF:02X}\n")
+def write_hex(signal, filename):
+    scale = 127.0 / np.max(np.abs(signal))
+    quantized = np.clip(np.round(signal * scale), -128, 127).astype(np.int8)
 
-print(f"Written samples.hex — {len(quantized)} entries")
+    with open(filename, "w") as f:
+        for s in quantized:
+            f.write(f"{int(s) & 0xFF:02X}\n")
+
+    print(f"Written {filename} — {len(signal)} entries")
+
+
+#IMPULSE SIGNAL
+impulse = np.zeros(N)
+impulse[0] = 1.0
+
+svd_filter_py.reset()
+for i, sample in enumerate(impulse):
+    y[i] = svd_filter_py.filterstep(sample)
+impulse_py_output = np.copy(y)
+
+write_hex(impulse, "impulse.hex")
+
+#HARMONIC 86 Hz SIGNAL
+f0 = 86  # Hz
+harmonic = np.sin(2 * np.pi * f0 * t)
+
+svd_filter_py.reset()
+for i, sample in enumerate(harmonic):
+    y[i] = svd_filter_py.filterstep(sample)
+harmonic_py_output = np.copy(y)
+write_hex(harmonic, "harmonic.hex")
+
+#DECREASING HARMONIC 86 Hz SIGNAL
+amp = np.arange(0,1,1/N)
+
+svd_filter_py.reset()
+for i, sample in enumerate(harmonic*amp):
+    y[i] = svd_filter_py.filterstep(sample)
+harmonic_dec_py_output = np.copy(y)
+write_hex(harmonic*amp, "harmonic_dec.hex")
+
+#CHIRP SIGNAL
+
+s_chirp = chirp(
+    t,
+    f0=0,
+    t1=t[-1],
+    f1=180,
+    method='linear'
+)
+svd_filter_py.reset()
+for i, sample in enumerate(s_chirp):
+    y[i] = svd_filter_py.filterstep(sample)
+chirp_py_output = np.copy(y)
+write_hex(s_chirp, "chirp.hex")
+
+fig = px.line()
+fig.add_scatter(y=impulse, name="Impulse")
+fig.add_scatter(y=harmonic, name="Harmonic")
+fig.add_scatter(y=s_chirp, name="Chirp")
+fig.add_scatter(y=harmonic*amp, name="Harmonic Decreasing")
+fig.update_layout(title="Test Signals")
+fig.show()
 
 # %%
 # =============================================================================
@@ -430,10 +495,10 @@ print(f"Written samples.hex — {len(quantized)} entries")
 
 print(f"Current working directory: {os.getcwd()}")
 
-weights_to_hex(Vt_q[0, :], "../weights/B0VT_weights.hex", width=16, quant=True)
-weights_to_hex(Vt_q[1, :], "../weights/B1VT_weights.hex", width=16, quant=True)
-weights_to_hex(Us_q[0, :], "../weights/B0US_weights.hex", width=16, quant=True)
-weights_to_hex(Us_q[1, :], "../weights/B1US_weights.hex", width=16, quant=True)
+weights_to_hex(Vt_q[0, :], "../weights/B0VT_weights.hex", width=8, quant=True)
+weights_to_hex(Vt_q[1, :], "../weights/B1VT_weights.hex", width=8, quant=True)
+weights_to_hex(Us_q[0, :], "../weights/B0US_weights.hex", width=8, quant=True)
+weights_to_hex(Us_q[1, :], "../weights/B1US_weights.hex", width=8, quant=True)
 
 # %%
 # =============================================================================
@@ -463,11 +528,11 @@ weights_to_hex(FIR_w, "../weights/FIR_weights.hex", width=16)
 # Loads results.txt written by the SystemVerilog testbench and compares
 # the FPGA output against the Python reference via time-domain and FFT plots.
 
-df_svd = pd.read_csv("../work/SVD_results.txt", skipinitialspace=True)
+df_svd = pd.read_csv("../work/SVD_results_impulse.txt", skipinitialspace=True)
 df_fir = pd.read_csv("../work/FIR_results.txt", skipinitialspace=True)
 
 fig = px.line()
-fig.add_scatter(y=df_svd['y'], name="y SVD FPGA")
+fig.add_scatter(x=df_svd['idx'],y=df_svd['y'], name="y SVD FPGA")
 fig.update_layout(title="FPGA Output")
 fig.show()
 
@@ -476,11 +541,11 @@ plot_fft_onesided(y,       fs=400, title="FFT — Python Reference")
 
 fig = px.line()
 
-fig.add_scatter(y=norm(FIR_w),   name="FIR weights (Python)",  line=dict(width=5))
-fig.add_scatter(y=norm(df_svd['y']), name="SVD FPGA output")
-fig.add_scatter(y=norm(SVD_py_output), name="SVD weights (Python)")
+fig.add_scatter(x=df_svd['idx'],y=norm(FIR_w),   name="FIR weights (Python)",  line=dict(width=5))
+fig.add_scatter(x=df_svd['idx'],y=norm(df_svd['y']), name="SVD FPGA output")
+fig.add_scatter(x=df_svd['idx'],y=norm(SVD_py_output), name="SVD weights (Python)")
 
-fig.add_scatter(y = norm(df_svd['y']) - norm(SVD_py_output), name= "Error SVD (FPGA - Python)")
+fig.add_scatter(x=df_svd['idx'],y = norm(df_svd['y']) - norm(SVD_py_output), name= "Error SVD (FPGA - Python)")
 
 fig.update_layout(title="Python vs FPGA — Normalized Comparison")
 fig.show()
@@ -495,6 +560,34 @@ print("This SVD is composed of 2 branches, with 2 DSPs per branch.\n" \
 " the simulated one with one DSP only. ")
 
 print(f"Num cycles per operation compression FIR w/4DSP: {100*df_fir["cycle_cnt"][0]/(4*df_svd["cycle_cnt"][0])}x")
+#%%
+# =============================================================================
+# FPGA OUTPUT COMPARISON
+# =============================================================================
+# Compare IMPULSE, HARMONIC and CHIRP TESTS (Fine tune for GUARD and offset)
+df_imp = pd.read_csv("../work/SVD_results_impulse.txt", skipinitialspace=True)
+df_harmonic = pd.read_csv("../work/SVD_results_harmonic.txt", skipinitialspace=True)
+df_chirp = pd.read_csv("../work/SVD_results_chirp.txt", skipinitialspace=True)
+df_harmonic_dec = pd.read_csv("../work/SVD_results_harmonic_dec.txt", skipinitialspace=True)
+fig = px.line()
+#For impulse responses to be similar, guard must be zero,
+fig.add_scatter(x=df_imp['idx'],y=(df_imp['y']),   name="SVD impulse response")
+fig.add_scatter(x=df_imp['idx'],y=(impulse_py_output),   name="SVD impulse ouput py")
+
+fig.add_scatter(x=df_harmonic['idx'],y=(df_chirp['y']), name="SVD Chirp response")
+fig.add_scatter(x=df_harmonic['idx'],y=(chirp_py_output), name="SVD Chirp output py")
+
+fig.add_scatter(x=df_harmonic['idx'],y=(harmonic_py_output), name="SVD Harmonic output py")
+fig.add_scatter(x=df_harmonic['idx'],y=(df_harmonic['y']), name="SVD Harmonic response")
+
+fig.add_scatter(x=df_harmonic_dec['idx'],y=(harmonic_dec_py_output), name="SVD Dec Harmonic output py")
+fig.add_scatter(x=df_harmonic_dec['idx'],y=(df_harmonic_dec['y']), name="SVD Dec Harmonic response")
+
+fig.update_layout(title="FPGA tests outputs")
+fig.show()
+
+# %%
+plot_fft_onesided(df_harmonic['y'], fs=400, title="FFT — SVD FPGA Output Harmonic")
 
 # %%
 # Run fft for individual branches, check if 2 branch per mode is visible
@@ -528,7 +621,7 @@ U, S, VT = np.linalg.svd(wsec_lagged)
 print(U.shape , S.shape , VT.shape)
 fig = go.Figure()
 fig.add_trace(go.Scatter(
-    y=S,
+    y=S/np.max(S),
     mode="lines"
 ))
 fig.update_layout(

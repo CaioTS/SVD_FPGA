@@ -8,8 +8,8 @@ module svd_filter #(
     input  reset,
     input  x_clk,
     input  [WIDTH-1:0] x,
-    output [WIDTH:0] y,
-    output signed y_done,
+    output [WIDTH-1:0] y,
+    output y_done,
 
     input load_weight,
     input [WIDTH -1: 0] weight,
@@ -113,7 +113,22 @@ module svd_filter #(
         .load_weight_addr(load_weight_addr[$left(load_weight_addr) - 1 : 0])
 );
 
-assign y_done = y_0_done & y_1_done;
-assign y = y_0 + y_1;
+logic [8:0] y_sum;
+logic y_done_reg;
+always_ff @ (posedge clk or negedge reset) begin
+    if (~reset) begin
+        y_done_reg <= 1'b0;
+        y_sum <= 8'h0;
+    end
 
+    else if (y_0_done & y_1_done) begin
+        y_sum <= y_0 + y_1;
+        y_done_reg <=1'b1;
+    end
+    else y_done_reg <= 1'b0;
+
+end 
+
+assign y = y_sum[8:1];
+assign y_done = y_done_reg;
 endmodule

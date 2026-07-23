@@ -1,11 +1,21 @@
 `timescale 1ns/1ps
 
+typedef enum logic [1:0] {
+    IMPULSE = 2'd0,
+    HARMONIC = 2'd1,
+    CHIRP = 2'd2,
+    HARMONIC_DEC = 2'd3
+} file_sel_t;
+
+file_sel_t file_sel;
+
+
 module svd_filter_tb;
 
     // ─────────────────────────────────────────────
     // Parameters
     // ─────────────────────────────────────────────
-    parameter WIDTH = 16;
+    parameter WIDTH = 8;
     parameter B     = 2;
     parameter C     = 64;
     parameter R     = 101;
@@ -18,7 +28,7 @@ module svd_filter_tb;
     reg                  x_clk;
     reg x_clk_en;
     reg  signed [WIDTH-1:0]     x;
-    wire signed [WIDTH:0]     y;
+    wire signed [WIDTH-1:0]     y;
 
     integer idx;
     integer cycle_cnt;
@@ -188,23 +198,38 @@ module svd_filter_tb;
     parameter N_SAMPLES = 1000;
 
 
-integer fd;
+integer fd_impulse, fd_harmonic, fd_chirp,fd;
 integer sample_idx;
 logic ignore_first_sample;
-    initial begin
-        fd = $fopen("SVD_results.txt", "w");
+
+logic [WIDTH-1:0] sample_mem [0:N_SAMPLES-1];
+
+
+    always @(file_sel) begin
+        string path_str = "";
+        string full_path;
+        case (file_sel)
+            IMPULSE:      begin path_str = "impulse";      $readmemh("../python/impulse.hex", sample_mem);  end
+            HARMONIC:     begin path_str = "harmonic";     $readmemh("../python/harmonic.hex", sample_mem); end
+            CHIRP:        begin path_str = "chirp";        $readmemh("../python/chirp.hex", sample_mem);    end
+            HARMONIC_DEC: begin path_str = "harmonic_dec"; $readmemh("../python/harmonic_dec.hex", sample_mem); end
+            default:      begin path_str = "impulse";      $readmemh("../python/impulse.hex", sample_mem);  end
+        endcase
+        full_path = {"SVD_results_", path_str , ".txt"};
+        fd = $fopen(full_path, "w");
         if (fd == 0) begin
             $display("ERROR: could not open results.txt");
             $finish;
         end
-        $fdisplay(fd, "idx, x, y, cycle_cnt");  // CSV header
+        $fdisplay(fd, "idx, x, y, cycle_cnt"); 
+
+
     end
 
     always @(posedge y_done) begin
-        if (!ignore_first_sample) ignore_first_sample = 1;
-        else begin $display("Output y = %d  (x = %d)", y, sample_mem[sample_idx - 1]);
-            $fdisplay(fd, "%0d, %0d, %0d ,%0d", sample_idx - 1, sample_mem[sample_idx - 1], y, cycle_cnt);
-        end
+        
+        $display("Output y = %d  (x = %d)", y, sample_mem[sample_idx]);
+        $fdisplay(fd, "%0d, %0d, %0d ,%0d", sample_idx, sample_mem[sample_idx], y, cycle_cnt);
         sample_idx <= sample_idx + 1;
     end
 
@@ -213,7 +238,6 @@ logic ignore_first_sample;
         $fclose(fd);
     end
 
-    logic [WIDTH-1:0] sample_mem [0:N_SAMPLES-1];
 
     initial begin
         $dumpfile(`VCD_FILE);
@@ -226,8 +250,6 @@ logic ignore_first_sample;
         //for (idx = 0; idx< R; idx = idx +1) $dumpvars(0, dut.b_0.Us[idx]);
         
         $dumpvars(0);
-
-        $readmemh("../python/samples.hex", sample_mem);
 
         $display("===== SVD Filter Testbench Start =====");
 
@@ -248,11 +270,16 @@ logic ignore_first_sample;
         //end
 
         x_clk_en = 1;
+
+        //File Selector 
+        file_sel = HARMONIC_DEC;
+        @ (posedge clk);
         for ( i = 0; i < N_SAMPLES; i++) begin
         send_sample(sample_mem[i]);
         end
 
-        wait_cycles(1000);
+        wait_cycles(500);
+         
         $display("\n===== Testbench Complete =====");
         $finish;
     end

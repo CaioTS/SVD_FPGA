@@ -18,12 +18,15 @@ module branch #(
     logic start;
     assign start = x_wr_en;
     logic VTx_calc_done;
-    wire [WIDTH - 1 : 0]Vtx_y;
+    wire [2*WIDTH - 1 : 0]Vtx_y;
 
     multiplier #(
         .N(C),
-        .WIDTH(WIDTH),
-        .GUARD(0)
+        .W_WIDTH(WIDTH),
+        .X_WIDTH(WIDTH),
+        .Y_WIDTH(2*WIDTH),
+        .GUARD(1) //Herre check for numbers different than 0
+        //.GUARD(0)
     ) 
     VTx (
         .clk(clk),
@@ -39,11 +42,11 @@ module branch #(
         .load_weight_addr(load_weight_addr[$clog2(C)-1 : 0])
     );  
 
-    reg [WIDTH -1:0] u_din , u_dout;
+    reg [2*WIDTH -1:0]  u_dout;
     reg [$clog2((R))-1:0] u_addr, u_wr_ptr;
 
     circ_buf #(
-        .WIDTH (WIDTH),
+        .WIDTH (2*WIDTH),
         .DEPTH ((R))
     ) u_buf (
         .clk       (clk),
@@ -70,8 +73,11 @@ module branch #(
     );
     multiplier #(
         .N(R),
-        .WIDTH(WIDTH),
-        .GUARD(0)
+        .W_WIDTH(WIDTH),
+        .X_WIDTH(2*WIDTH),
+        .Y_WIDTH(WIDTH),
+        .GUARD(2)
+        //.GUARD(0)
     ) US_VTX
     (
         .clk(clk),
