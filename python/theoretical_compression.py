@@ -5,40 +5,16 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from plotly.colors import sample_colorscale
 
-"""
-Return coefficients , memory and number of operations necessary for 
-the svd operation by receveing as input the filter size and branch. 
-Will assume the best R and C relation is the square of the filter_size
-"""
-def calc_svd_utilizations(W_size,N_branches):
-    
-    R = int(np.ceil(np.sqrt(W_size))) # Size related to US
-    C = int(np.ceil(W_size/R)) # Assumes padding (size related to Vt)
+from aux_functions import calc_svd_utilizations_teo, calc_fir_utilization
 
-
-    num_coefs = N_branches* (R + C)
-    num_ops = (2*(R + C)*N_branches )+ N_branches - 1 
-    n_mem = R*C + num_coefs + C + N_branches*R 
-    print(f'{W_size =}, {N_branches = } , {R = },{C = }, {num_coefs = }')
-    return n_mem, num_coefs ,num_ops
-
-"""Calculate commmon FIR resources utilizations with the 
-input being the filter_size"""
-def calc_fir_utilization(W_size):
-    num_coefs = W_size
-    n_mem = 2 * W_size
-    n_ops = 2*W_size - 1 
-    return n_mem,num_coefs,n_ops
-
-calc_svd_utilizations(400,2)
-
+calc_svd_utilizations_teo(400,2)
 
 
 # %%
 fs = 416
 
 N = np.arange(500,2000,300)
-B = np.arange(1,6,1)
+B = np.arange(1,7,1)
 svd_coefs = np.zeros_like(N)
 svd_mems  = np.zeros_like(N)
 svd_ops   = np.zeros_like(N)
@@ -48,12 +24,12 @@ fir_mems  = np.zeros_like(N)
 fir_ops   = np.zeros_like(N)
 
 for n in N:  
-    svd_mems[N == n],svd_coefs[N == n], svd_ops[N == n] = calc_svd_utilizations(n,2)
+    svd_mems[N == n],svd_coefs[N == n], svd_ops[N == n] = calc_svd_utilizations_teo(n,6)
     fir_mems[N == n],fir_coefs[N == n], fir_ops[N == n] = calc_fir_utilization(n)
 # %%
-compression_coefs = 100 * (svd_coefs/fir_coefs)
-compression_mems  = 100 * (svd_mems /fir_mems)
-compression_ops   = 100 * (svd_ops  /fir_ops)
+compression_coefs = 100 * (1 - svd_coefs/fir_coefs)
+compression_mems  = 100 * (1 - svd_mems /fir_mems)
+compression_ops   = 100 * (1 - svd_ops  /fir_ops)
 
 # Create the figure
 fig = go.Figure()
@@ -123,7 +99,7 @@ fig = make_subplots(
 # Add trace related to number of coefficients per branch and FIR
 for c,b in enumerate(B):
     for n in N:
-        svd_mems[N == n],svd_coefs[N == n], svd_ops[N == n] = calc_svd_utilizations(n,b)
+        svd_mems[N == n],svd_coefs[N == n], svd_ops[N == n] = calc_svd_utilizations_teo(n,b)
     fig.add_trace(
         go.Scatter(x=N, y=svd_coefs, mode='lines+markers', name=f'Branches = {b}',  line=dict(color=colors[c])),
         row=1, col=1
@@ -175,3 +151,7 @@ fig.update_yaxes(title_text='Number of Operations', row=1, col=3)
 
 # Show the figure
 fig.show()
+
+
+# %%
+#CALCULATE COMPRESSIO RATES BASED ON THE EXPERIMENTAL RESUTLS AND SEEIF THEY MATCH THE THEORETICAL ONES

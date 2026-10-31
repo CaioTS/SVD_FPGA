@@ -7,14 +7,15 @@ import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import matplotlib.pyplot as plt
-from scipy import signal
-from scipy.fft import fft, fftfreq
 from scipy.signal import chirp
 
 from CantileverBeam import CantileverBeam
-from Adaptive import FIRNLMS
-from AdaptiveOO import FIRFxNLMS, FIR
+from aux_functions import (
+    norm, format_W, lagged_matrix, svd_branch_weights, gen_SVD_weights,
+    FIRSVDFilterPy, gen_wsec_wfbk_filters, quantize_matrix, weights_to_hex,
+    matrix_to_sv_hex, write_hex, plot_fft_onesided, plot_phase_onesided,
+    plot_paired_branches_fft, plot_cumulative_branches_fft,
+)
 
 # %%
 # =============================================================================
@@ -97,8 +98,8 @@ fig.show()
 # Plots both the input force and the resulting acceleration response.
 
 maxtime  = 60.0
-vibstart = 10.0
-vibfreq  = 10.0   # Hz
+vibstart = 10
+vibfreq  = 80.0   # Hz
 
 nsteps = int(maxtime * fs)
 th = np.linspace(0.0, maxtime, nsteps)
@@ -109,7 +110,7 @@ cbeam.reset()
 err = np.zeros(nsteps)
 for k in range(nsteps):
     err[k] = cbeam.getaccelms2(referencepos)
-    cbeam.setforce(perturbpos, xh[k])
+    cbeam.setforce(controlpos, xh[k])
     cbeam.update()
 
 fig = px.line()
@@ -119,252 +120,20 @@ fig.show()
 
 # %%
 # =============================================================================
-# HELPER FUNCTIONS
-# =============================================================================
-# Utility functions used throughout the script:
-#   format_W          : reshapes and zero-pads a weight vector into a 2D matrix
-#   gen_wsec_wfbk_filters : computes impulse responses for secondary/feedback paths
-#   gen_SVD_weights   : performs SVD decomposition and extracts branch weights
-#   quantize_matrix   : quantizes float matrix to signed fixed-point integers
-#   weights_to_hex    : writes a numpy array to a .hex file for $readmemh
-#   matrix_to_sv_hex  : prints weights as SystemVerilog parameter hex literals
-#   plot_fft_onesided : plots one-sided FFT magnitude spectrum using Plotly
-#   norm              : normalizes array to [-1, 1]
-
-def format_W(W, C):
-    """Zero-pad and reshape weight vector into a 2D matrix of C columns."""
-    n_pad = W.shape[0] % C
-    W_pad = np.zeros(int(W.shape[0] + (C - n_pad)))
-    W_pad[:W.shape[0]] = W
-    R = W_pad.shape[0] / C
-    lower_dim = min(R, C)
-    return W_pad.reshape(-1, int(lower_dim), order='F')
-
-
-def gen_wsec_wfbk_filters(firmem):
-    """
-    Compute impulse responses for the secondary path (control→error)
-    and feedback path (control→reference) by simulating the beam.
-    Returns (wsecimpulse, wfbkimpulse).
-    """
-    def get_impulse(output_pos):
-        impulse = np.zeros(firmem)
-        cbeam.reset()
-        cbeam.setforce(controlpos, 1.0)
-        cbeam.update()
-        impulse[0] = cbeam.getaccelms2(output_pos)
-        cbeam.setforce(controlpos, 0.0)
-        for k in range(1, firmem):
-            cbeam.update()
-            impulse[k] = cbeam.getaccelms2(output_pos)
-        return impulse
-
-    wsecimpulse = get_impulse(errorpos)
-    wfbkimpulse = get_impulse(referencepos)
-
-    fig = px.line()
-    fig.add_scatter(y=wfbkimpulse, name="Feedback path")
-    fig.add_scatter(y=wsecimpulse, name="Secondary path")
-    fig.show()
-
-    return wsecimpulse, wfbkimpulse
-
-
-def gen_SVD_weights(weights, num_coef, C_size=0, plot_S=False):
-    """
-    Decompose a FIR filter weight vector using SVD and extract
-    branch weights (C_weights, R_weights) for a given number of
-    equivalent coefficients.
-
-    Args:
-        weights  : 1D array of FIR filter coefficients
-        num_coef : target number of coefficients after SVD compression
-        C_size   : number of columns in the reshaped matrix (0 = auto sqrt)
-
-    Returns:
-        C_weights : (B, C) right-singular vectors (Vt rows)
-        R_weights : (B, R) left-singular * sigma vectors (Us rows)
-    """
-    full_size  = len(weights)
-    C_chosen_s = C_size if C_size != 0 else int(np.sqrt(full_size))
-    W          = format_W(weights, C_chosen_s)
-    print(f'{W.shape = }')
-    R_s = W.shape[0]
-    B_s = int(np.round(num_coef / (C_chosen_s + R_s)))
-
-    U, S, VT = np.linalg.svd(W)
-    SM = np.zeros((R_s, C_chosen_s))
-    np.fill_diagonal(SM, S)
-    US = U @ SM
-
-    C_weights = np.zeros((B_s, VT.shape[1]))
-    R_weights = np.zeros((B_s, U.shape[0]))
-    for i in range(B_s):
-        C_weights[i, :] = VT.T[:, i]
-        R_weights[i, :] = US[:, i]
-
-    if (plot_S):
-        fig = px.line()
-        fig.add_scatter(y=S/np.max(S))
-        fig.update_layout(title="Singular Values")
-
-        fig.show()
-    return C_weights, R_weights
-
-
-def quantize_matrix(matrix, max_ov, width=8):
-    """
-    Quantize a float matrix to signed fixed-point integers.
-    Uses a global max_ov for consistent scaling across matrices.
-    """
-    scale = (2 ** (width - 1) - 1) / max_ov if max_ov != 0 else 1
-    quantized = np.clip(
-        np.round(matrix * scale),
-        -(2 ** (width - 1)),
-        2 ** (width - 1) - 1
-    )
-    return quantized.astype(np.int8)
-
-
-def weights_to_hex(weights: np.ndarray, filename: str,
-                   width: int = 8, quant: bool = False) -> None:
-    """
-    Write a numpy array of filter weights to a .hex file for $readmemh.
-    If quant=False, quantizes from float. If quant=True, uses values as-is.
-
-    Args:
-        weights  : numpy array (any shape, will be flattened)
-        filename : output .hex file path
-        width    : bit width per coefficient (default 8)
-        quant    : if True, skip quantization (array already quantized)
-    """
-    if not quant:
-        max_val   = np.max(np.abs(weights))
-        scale     = (2 ** (width - 1) - 1) / max_val if max_val != 0 else 1.0
-        quantized = np.clip(
-            np.round(weights.flatten() * scale),
-            -(2 ** (width - 1)),
-            (2 ** (width - 1)) - 1
-        ).astype(np.int8 if width <= 8 else np.int16)
-    else:
-        quantized = weights.flatten()
-
-    hex_digits = width // 4
-    with open(filename, "w") as f:
-        for v in quantized:
-            f.write(f"{int(v) & (2 ** width - 1):0{hex_digits}X}\n")
-
-    print(f"Written {filename} — {len(quantized)} entries  "
-          f"range=[{quantized.min()}, {quantized.max()}]")
-
-
-def matrix_to_sv_hex(matrix, name, width=8):
-    """
-    Print a matrix as SystemVerilog parameter hex literals.
-    Columns are reversed so that flat[i*WIDTH +: WIDTH] == col[i].
-    """
-    if len(matrix.shape) == 2:
-        rows, cols = matrix.shape
-    else:
-        cols, rows = len(matrix), 1
-
-    hex_digits = width // 4
-    print(f"// {name} — shape ({rows}, {cols})")
-    for r in range(rows):
-        row_data = matrix[r] if rows != 1 else matrix
-        row_hex  = "".join(
-            f"{int(v) & (2 ** width - 1):0{hex_digits}X}"
-            for v in reversed(row_data)
-        )
-        total_bits = cols * width
-        print(f"// ({r}, :)")
-        print(f"parameter [{total_bits - 1}:0] {name}_ROW{r} = {total_bits}'h{row_hex};")
-    print()
-
-
-def plot_fft_onesided(sig, fs=1.0, title="FFT"):
-    """Plot one-sided FFT magnitude spectrum in dB using Plotly."""
-    N      = len(sig)
-    sig_n  = sig / np.max(np.abs(sig))
-    fft_mag = np.abs(np.fft.rfft(sig_n)) / N
-    fft_mag[1:-1] *= 2
-    fft_db  = 20 * np.log10(fft_mag + 1e-12)
-    freqs   = np.fft.rfftfreq(N, d=1 / fs)
-
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=freqs, y=fft_db, mode="lines",
-        line=dict(color="#1D9E75", width=1.5)
-    ))
-    fig.update_layout(
-        title=title,
-        xaxis_title="Frequency (Hz)",
-        yaxis_title="Magnitude (dB)",
-        template="plotly_dark",
-        hovermode="x unified"
-    )
-    fig.show()
-
-
-def norm(x):
-    """Normalize array to [-1, 1]."""
-    return x / np.max(np.abs(x))
-
-# %%
-# =============================================================================
-# SVD FILTER — PYTHON REFERENCE IMPLEMENTATION
-# =============================================================================
-# Implements the SVD-based FIR filter in pure Python.
-# Used as the golden reference to compare against the FPGA implementation.
-# Architecture:
-#   1. Input buffer of length N = R*C (circular)
-#   2. Vt (C_weights) projects the downsampled buffer onto B scalars
-#   3. Each scalar is filtered by an FIR with R_weights[b]
-#   4. Outputs are summed to produce y
-
-class FIRSVDFilterPy(FIR):
-    def __init__(self, C_weights, R_weights):
-        self.R   = R_weights.shape[1]
-        self.C   = C_weights.shape[1]
-        self.B   = C_weights.shape[0]
-        self.N   = self.R * self.C
-        self.vdot = C_weights
-        self.inputbuffer = np.zeros(self.N)
-        self.util = [FIR(R_weights[k, :]) for k in range(self.B)]
-        self.youts_outs = []
-        self.reset()
-
-    def reset(self):
-        self.y = 0
-        self.inputbuffer[:] = 0.0
-        self.youts_outs = [] 
-        for k in range(self.B):
-            self.util[k].reset()
-
-    def filterstep(self, xn):
-        self.inputbuffer[1:] = self.inputbuffer[:-1]
-        self.inputbuffer[0]  = xn
-        self.youts = self.vdot @ self.inputbuffer[::self.R]
-        for k in range(self.B):
-            self.youts[k] = self.util[k].filterstep(self.youts[k])
-        self.y = np.sum(self.youts)
-        self.youts_outs.append(self.youts)
-        return self.y
-
-# %%
-# =============================================================================
 # IMPULSE RESPONSE & SVD WEIGHT GENERATION
 # =============================================================================
 # Computes the secondary path impulse response, then runs SVD decomposition
 # to obtain Vt (C_weights) and Us (R_weights) for each branch.
 # Also quantizes the weights and plots them for inspection.
 
-wsecimpulse, wfbkimpulse = gen_wsec_wfbk_filters(firmem)
+wsecimpulse, wfbkimpulse = gen_wsec_wfbk_filters(cbeam, firmem, controlpos, errorpos, referencepos)
 print(wsecimpulse.shape, wfbkimpulse.shape)
 
 #filter_size = 6400
 filter_size = 2 * (64 + 101)
-C_weights_sec, R_weights_sec = gen_SVD_weights(wsecimpulse, filter_size, C_size=64, plot_S=True)
+# always_pad=True keeps R = 101 (6400 taps / 64 + 1), as expected by svd_filter_tb.sv
+C_weights_sec, R_weights_sec , S_emb= gen_SVD_weights(wsecimpulse, filter_size, C_size=64, plot_S=True,
+                                                      always_pad=True)
 print(f"Vt shape: {C_weights_sec.shape}  Us shape: {R_weights_sec.shape}")
 
 # Quantize with a shared scale so relative magnitudes are preserved
@@ -373,6 +142,8 @@ max_ov = np.max([np.max(np.abs(C_weights_sec)), np.max(np.abs(R_weights_sec))])
 Vt_q   = quantize_matrix(C_weights_sec, np.max(np.abs(C_weights_sec)))
 Us_q   = quantize_matrix(R_weights_sec, np.max(np.abs(R_weights_sec)))
 
+plot_fft_onesided(wsecimpulse, fs ,"Secondary Path FFT")
+plot_fft_onesided(wfbkimpulse, fs ,"Feedback Path FFT")
 
 
 fig = px.line()
@@ -421,16 +192,6 @@ plot_fft_onesided(y, fs=400, title="FFT — Python SVD Filter Output")
 fs = 400                    # Sampling frequency (Hz)
 N = len(x)                  # Number of samples
 t = np.arange(N) / fs
-
-def write_hex(signal, filename):
-    scale = 127.0 / np.max(np.abs(signal))
-    quantized = np.clip(np.round(signal * scale), -128, 127).astype(np.int8)
-
-    with open(filename, "w") as f:
-        for s in quantized:
-            f.write(f"{int(s) & 0xFF:02X}\n")
-
-    print(f"Written {filename} — {len(signal)} entries")
 
 
 #IMPULSE SIGNAL
@@ -607,38 +368,37 @@ for i in range(svd_outs.shape[1]) :
 # =============================================================================
 #Compress filter to around 2400 taps
 mem = 2400
-wsecimpulse, _ = gen_wsec_wfbk_filters(mem)
+wsecimpulse, wfbkimpulse = gen_wsec_wfbk_filters(cbeam, mem, controlpos, errorpos, referencepos)
 plot_fft_onesided(wsecimpulse , fs= 400, title="FFT secondary path")
 # Create lagged matrice
 L = 1200
 K = mem - L + 1
-wsec_lagged = np.zeros((L,K))
-for l in range(L):
-    for k in range(K):
-        wsec_lagged[l,k] = wsecimpulse[l + k]
+W   = format_W(wsecimpulse, L)
+print(f'{W.shape = }')
+
+wsec_lagged = lagged_matrix(wsecimpulse, L)
 #Make SVD of lagged vector
-U, S, VT = np.linalg.svd(wsec_lagged)
-print(U.shape , S.shape , VT.shape)
+U, S_lagged, VT = np.linalg.svd(wsec_lagged)
+print(U.shape , S_lagged.shape , VT.shape)
 fig = go.Figure()
 fig.add_trace(go.Scatter(
-    y=S/np.max(S),
-    mode="lines"
+    y=S_lagged/np.max(S_lagged),
+    mode="lines",
+    name="Lagged"
+))
+fig.add_trace(go.Scatter(
+    y=S_emb/np.max(S_emb),
+    mode="lines",
+    name="Stacked"
 ))
 fig.update_layout(
-        title="EigenValues of SVD on Lagged secondary filter"
+        title="Normalized EigenValues of SVD on Lagged and Stacked matrice"
 )
 fig.show()
 # %%
 
-SM = np.zeros((L, K))
-np.fill_diagonal(SM, S)
-US = U @ SM
 B_s = 6
-C_weights = np.zeros((B_s, VT.shape[1]))
-R_weights = np.zeros((B_s, U.shape[0]))
-for i in range(B_s):
-    C_weights[i, :] = VT.T[:, i]
-    R_weights[i, :] = US[:, i]
+C_weights, R_weights = svd_branch_weights(U, S_lagged, VT, B_s)
 
 svd_lagged = FIRSVDFilterPy(C_weights, R_weights)
 svd_lagged.reset()
@@ -649,12 +409,69 @@ y = np.zeros_like(x)
 for i, sample in enumerate(x):
     y[i] = svd_lagged.filterstep(sample)
 
-svd_laggd_output = y
 svd_lagged_outs = np.array(svd_lagged.youts_outs)
 
 # %%
-plot_fft_onesided(y, fs=400, title=f"FFT — Python SVD Filter Output")
+plot_fft_onesided(y, fs=fs, title=f"FFT — Python SVD Filter Output")
 for i in range(svd_lagged_outs.shape[1]) :
-    plot_fft_onesided(svd_lagged_outs[:,i], fs=400, title=f"FFT — Python SVD Filter Output Branch {i}")
+    plot_fft_onesided(svd_lagged_outs[:,i], fs=fs, title=f"FFT — Python SVD Filter Output Branch {i}")
 
+#%%
+fig = plot_paired_branches_fft(svd_lagged_outs, fs=fs, ylim=(-100, 0))
+fig.write_image("figs/Hankel_Branches_FFT.pdf") 
+#%%
+#Generate Same Frequency Response for feedback implementation
+W   = format_W(wfbkimpulse, L)
+print(f'{W.shape = }')
+
+wfbk_lagged = lagged_matrix(wfbkimpulse, L)
+#Make SVD of lagged vector
+U, S_lagged, VT = np.linalg.svd(wfbk_lagged)
+
+B_s = 6
+C_weights, R_weights = svd_branch_weights(U, S_lagged, VT, B_s)
+
+svd_lagged = FIRSVDFilterPy(C_weights, R_weights)
+svd_lagged.reset()
+
+x = np.zeros(1000)
+x[0] = 1.0
+y = np.zeros_like(x)
+for i, sample in enumerate(x):
+    y[i] = svd_lagged.filterstep(sample)
+
+svd_lagged_outs_fbk = np.array(svd_lagged.youts_outs)
+
+
+fig = plot_paired_branches_fft(svd_lagged_outs_fbk, fs=fs, ylim=(-100, -10))
+fig.write_image("figs/Hankel_Branches_FFT_fbk.pdf") 
+#%%
+
+plot_fft_onesided(y,fs,"FFT of whole feedback")
+plot_phase_onesided(y,fs,"FFT phase of whole feedback")
+
+
+#%%
+#Generate Same Frequency Response for feedback implementation
+filter_size = 6 * (64 + 101)
+C_weights_fbk, R_weights_fbk , S_emb= gen_SVD_weights(wfbkimpulse, filter_size, C_size=64, plot_S=True)
+
+svd_stack = FIRSVDFilterPy(C_weights_fbk, R_weights_fbk)
+svd_stack.reset()
+
+x = np.zeros(1000)
+x[0] = 1.0
+y = np.zeros_like(x)
+for i, sample in enumerate(x):
+    y[i] = svd_stack.filterstep(sample)
+
+svd_stack_outs_fbk = np.array(svd_stack.youts_outs)
+
+
+fig = plot_paired_branches_fft(svd_stack_outs_fbk, fs=fs, ylim=(-100, -10),group_size  = 1)
+fig.write_image("figs/Hankel_Branches_FFT_fbk_stack.pdf") 
+plot_fft_onesided(y , fs , "FFT- SVD 6 Branches")
+
+# %%
+plot_cumulative_branches_fft(svd_stack_outs_fbk, fs=fs)           # 1, 1+2, 1+2+3, ...
 # %%

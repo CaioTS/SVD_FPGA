@@ -5,5 +5,5 @@
 # Debug files
 *.fst
 *.vcd
-
+synth_results/*
 
