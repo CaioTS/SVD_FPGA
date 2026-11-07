@@ -14,6 +14,7 @@ from aux_functions import (
     FIRSVDFilterPy, gen_wsec_wfbk_filters, plot_fft_onesided_pair,
     plot_fft_onesided_n_modes, plot_singular_values, compare_filters,
     calc_svd_utilizations, calc_svd_utilizations_teo, calc_fir_utilization,
+    choose_RC,
 )
 
 # %%
@@ -24,12 +25,12 @@ from aux_functions import (
 # These parameters define the beam geometry, sensor/actuator positions,
 # and the sampling frequency used throughout the simulation.
 
-fs          = 416.0   # Sampling frequency (Hz)
+fs          = 416.0 * 2  # Sampling frequency (Hz)
 npoints     = 100     # Number of finite elements in the beam
 beamlength  = 0.58    # Beam length (m)
 beamwidth   = 0.05    # Beam width (m)
 beamthickness = 0.006 # Beam thickness (m)
-dampingfactors = [0.01, 0.01, 0.01, 0.01, 0.01]
+dampingfactors = [0.01, 0.01, 0.01]
 
 perturbpos  = 30      # FE node: perturbation force input
 referencepos = 75     # FE node: reference accelerometer
@@ -38,6 +39,64 @@ errorpos    = 95      # FE node: error accelerometer
 
 firmem      = 6400    # FIR filter memory length (samples)
 mu          = 0.01    # LMS step size
+
+# Delay of the paths (samples). The first n_delay samples of the impulse
+# responses do not follow the sum of exponentials h[n] = sum c_k z_k^n, so
+# they add up to n_delay extra singular values (rank <= 2M + n_delay).
+# They are NOT zero (h[1] is large, specially in the feedback path), so they
+# cannot just be dropped: they are kept as a short direct FIR ("head") and the
+# SVD is applied only to the tail h[n_delay:], delayed by n_delay samples:
+#   y[n] = sum_{k<d} h[k] x[n-k]  +  SVD{h[d:]}(x[n-d])
+# (see the "EFFECT OF THE DELAY" section at the end).
+n_delay     = 2
+
+# Choice of R (rows) and C (columns) of the stacked matrix, N_svd = R*C:
+#   "pad"    : C = floor(sqrt N), R = ceil(N/C) and zeros appended up to R*C
+#              (original behaviour; the zeros break the sum-of-exponentials
+#              structure of the last column and add residual singular values)
+#   "extend" : smallest R*C >= N with R/C <= rc_max_ratio; the extra R*C - N
+#              taps are TRUE samples of h (filter slightly longer, no zeros)
+#   "factor" : R*C = N exactly (divisor of N closest to sqrt N); falls back to
+#              "extend" when N has no divisor with R/C <= rc_max_ratio
+rc_mode      = "extend"
+rc_max_ratio = 1.5
+
+# %%
+# =============================================================================
+# HEAD + DELAYED TAIL FILTER
+# =============================================================================
+class HeadTailFilter:
+    """
+    y[n] = sum_{k<d} head[k] x[n-k] + tail(x[n-d]),  d = len(head).
+    head = h[:d] (direct FIR), tail = SVD filter of h[d:]. The d-sample buffer
+    is shared: it is the head FIR memory and the delay line of the tail.
+    Resources added to the SVD filter: d coefs, 2d memory, 2d operations.
+    """
+    def __init__(self, inner, head):
+        self.inner = inner
+        self.head  = np.asarray(head, dtype=float)
+        self.d     = len(self.head)
+        self.buf   = np.zeros(self.d)
+
+    def reset(self):
+        self.buf[:] = 0.0
+        self.inner.reset()
+
+    def filterstep(self, xn):
+        if self.d == 0:
+            return self.inner.filterstep(xn)
+        xd = self.buf[-1]                 # x[n-d]
+        self.buf[1:] = self.buf[:-1]
+        self.buf[0]  = xn                 # buf = [x[n], ..., x[n-d+1]]
+        return self.head @ self.buf + self.inner.filterstep(xd)
+
+    def filter(self, x):
+        return np.array([self.filterstep(xn) for xn in x])
+
+
+def head_resources(d):
+    """Memory, coefficients and operations added by the d-tap head."""
+    return 2 * d, d, 2 * d
 
 # %%
 # =============================================================================
@@ -53,6 +112,7 @@ cbeam = CantileverBeam(
     length=beamlength,
     Tsampling=1.0 / fs,
     damp=dampingfactors,
+    nmodes=3
 )
 cbeam.reset()
 
@@ -247,27 +307,37 @@ len_filter = filter_lengths[0.05]
 # =============================================================================
 # GENERATE SVD WITH THEORETICAL NUMBER OF BRANCHES
 # =============================================================================
-X = wsecimpulse[:len_filter]
+# The SVD part models h[n_delay:len_total]; the first n_delay samples are the
+# direct FIR head (HeadTailFilter). R and C come from choose_RC (rc_mode):
+# with "extend" len_total >= len_filter and no zeros are padded.
+R_rows, C_cols, len_svd, n_zeros = choose_RC(len_filter - n_delay, rc_mode, rc_max_ratio)
+len_total = n_delay + len_svd
+print(f"rc_mode = {rc_mode} | R x C = {R_rows} x {C_cols} = {R_rows * C_cols} | "
+      f"samples of h = {len_svd} | zeros padded = {n_zeros} | "
+      f"len_total = {len_total} (len_filter = {len_filter})")
+X = wsecimpulse[n_delay:len_total]
 
 n_branches = 6
-C, R , S= gen_SVD_weights_branches(X, n_branches, C_size=int(np.sqrt(len_filter)), plot_S=True)
+C, R , S= gen_SVD_weights_branches(X, n_branches, C_size=C_cols, plot_S=False)
 
-svd_filter_py = FIRSVDFilterPy(C, R)
+svd_filter_py = HeadTailFilter(FIRSVDFilterPy(C, R), wsecimpulse[:n_delay])
 
-print(C.shape, R.shape)
+print(f"n_delay = {n_delay} | len_svd = {len_svd}", C.shape, R.shape)
 
 # %%
 # --- Setup ---
-mem = len_filter
+mem = len_total
 wsecimpulse, wfbkimpulse = gen_wsec_wfbk_filters(cbeam, mem, controlpos, errorpos, referencepos)
 
-L = int(np.sqrt(mem)) + 1
-K = mem - L + 1
-print(f"mem = {mem} | L = {L} | K = {K}")
+# Matrices are built from the delay-free part h[n_delay:], with the same R x C
+wsec_tail = wsecimpulse[n_delay:]
+L = R_rows
+K = len(wsec_tail) - L + 1
+print(f"mem = {mem} | n_delay = {n_delay} | L = {L} | K = {K}")
 
 # --- Stacked vs. lagged matrices ---
-wsec_stack  = format_W(wsecimpulse, L)
-wsec_lagged = lagged_matrix(wsecimpulse, L)
+wsec_stack  = format_W(wsec_tail, C_cols)
+wsec_lagged = lagged_matrix(wsec_tail, L)
 
 U_stack,  S_stack,  VT_stack  = svd_report("Stacked", wsec_stack)
 U_lagged, S_lagged, VT_lagged = svd_report("Lagged",  wsec_lagged)
@@ -275,7 +345,7 @@ U_lagged, S_lagged, VT_lagged = svd_report("Lagged",  wsec_lagged)
 
 # ── Usage ──────────────────────────────────────────────────────────
 #fig = plot_singular_values(S_lagged, S_stack, normalize=True,  log_y=False)
-fig = plot_singular_values(S_lagged, S_stack, normalize=False, log_y=False)
+fig = plot_singular_values(S_lagged, S_stack, normalize=False, log_y=True)
 fig.update_xaxes(range=[1, 12]) 
 fig.show()
 fig.write_image("figs/S_values_comp.pdf") 
@@ -284,6 +354,8 @@ fig.write_image("figs/S_values_comp.pdf")
 # COMPARE ORIGINAL FILTER AND SVD FILTER PARAMETERS
 # =============================================================================
 svd_mem, svd_coefs, svd_ops = calc_svd_utilizations(C, R)
+h_mem, h_coefs, h_ops = head_resources(n_delay)   # n_delay-tap direct FIR head
+svd_mem, svd_coefs, svd_ops = svd_mem + h_mem, svd_coefs + h_coefs, svd_ops + h_ops
 fir_mem, fir_coefs, fir_ops = calc_fir_utilization(len_filter)
 
 # Compression rates
@@ -339,7 +411,10 @@ fir_mems_teo = np.zeros_like(N)
 fir_ops_teo = np.zeros_like(N)
 
 for n in N:  
-    svd_mems_teo[N == n],svd_coefs_teo[N == n], svd_ops_teo[N == n] = calc_svd_utilizations_teo(n,6)
+    svd_mems_teo[N == n],svd_coefs_teo[N == n], svd_ops_teo[N == n] = calc_svd_utilizations_teo(n - n_delay,6, rc_mode, rc_max_ratio)
+    svd_mems_teo[N == n]  += head_resources(n_delay)[0]   # n_delay-tap head
+    svd_coefs_teo[N == n] += head_resources(n_delay)[1]
+    svd_ops_teo[N == n]   += head_resources(n_delay)[2]
     fir_mems_teo[N == n],fir_coefs_teo[N == n], fir_ops_teo[N == n] = calc_fir_utilization(n)
 # %%
 compression_coefs = 100 * (1 - svd_coefs_teo/fir_coefs_teo)
@@ -399,7 +474,9 @@ fig.show()
 N_branches = 6
 N = np.arange(500, 4000, 300)
 
-svd = np.array([calc_svd_utilizations_teo(n, N_branches) for n in N])  # (len(N), 3)
+# SVD part models n - n_delay coefficients; the n_delay-tap head is added on top
+svd = np.array([calc_svd_utilizations_teo(n - n_delay, N_branches, rc_mode, rc_max_ratio) for n in N])  # (len(N), 3)
+svd = svd + np.array(head_resources(n_delay))
 fir = np.array([calc_fir_utilization(n) for n in N])
 
 svd_mems_teo, svd_coefs_teo, svd_ops_teo = svd.T
@@ -413,7 +490,8 @@ N_patamars = filter_lengths   # filter size used in the experiment
 
 utilizations = {}
 for thresh, n in N_patamars.items(): 
-    m_svd,  c_svd, o_svd = calc_svd_utilizations_teo(n, N_branches)
+    m_svd,  c_svd, o_svd = np.add(calc_svd_utilizations_teo(n - n_delay, N_branches, rc_mode, rc_max_ratio),
+                                  head_resources(n_delay))
     m_fir , c_fir, o_fir = calc_fir_utilization(n)
     utilizations[thresh] = {
         "Coefficients": 100 * (1 -  c_svd/c_fir), 
@@ -506,47 +584,227 @@ fig.write_image("figs/error_svd_fir.pdf")
 # =============================================================================
 # GENERATE SVD WITH THEORETICAL NUMBER OF BRANCHES
 # =============================================================================
-X_f = wfbkimpulse[:len_filter]
+X_f = wfbkimpulse[n_delay:len_total]   # delay-free part, same R x C as the secondary path
 
 n_branches = 6
-C_f, R_f , S_f = gen_SVD_weights_branches(X_f, n_branches, C_size=int(np.sqrt(len_filter)), plot_S=True)
+C_f, R_f , S_f = gen_SVD_weights_branches(X_f, n_branches, C_size=C_cols, plot_S=False)
 
-svd_fbk_filter_py = FIRSVDFilterPy(C, R)
+svd_fbk_filter_py = HeadTailFilter(FIRSVDFilterPy(C_f, R_f), wfbkimpulse[:n_delay])
 
-print(C.shape, R.shape)
+print(f"n_delay = {n_delay} | len_svd = {len_svd}", C_f.shape, R_f.shape)
+
 
 # %%
 # --- Setup ---
-mem = len_filter
+mem = len_total
 wsecimpulse, wfbkimpulse = gen_wsec_wfbk_filters(cbeam, mem, controlpos, errorpos, referencepos)
 
-L = int(np.sqrt(mem)) + 1
-K = mem - L + 1
-print(f"mem = {mem} | L = {L} | K = {K}")
+wfbk_tail = wfbkimpulse[n_delay:]
+L = R_rows
+K = len(wfbk_tail) - L + 1
+print(f"mem = {mem} | n_delay = {n_delay} | L = {L} | K = {K}")
 
 # --- Stacked vs. lagged matrices ---
-wfbk_stack  = format_W(wfbkimpulse, L)
-wfbk_lagged = lagged_matrix(wfbkimpulse, L)
+wfbk_stack  = format_W(wfbk_tail, C_cols)
+wfbk_lagged = lagged_matrix(wfbk_tail, L)
 
 U_stack_fbk,  S_stack_fbk,  VT_stack_fbk  = svd_report("Stacked", wfbk_stack)
 U_lagged_fbk, S_lagged_fbk, VT_lagged_fbk = svd_report("Lagged",  wfbk_lagged)
 
 
-fig = plot_singular_values(S_lagged_fbk, S_stack_fbk,normalize=False,log_y=False)
+fig = plot_singular_values(S_lagged_fbk, S_stack_fbk,normalize=False,log_y=True)
 fig.update_xaxes(range=[1, 12]) 
 fig.show()
 fig.write_image("figs/S_values_comp_fbk.pdf")
 # %%
 #Compare filter outputs 
  
-fir_filter_py = FIR(wsecimpulse)
+fir_fbk_filter_py = FIR(wfbkimpulse)
 
 
-fig, err = compare_filters(svd_fbk_filter_py, fir_filter_py,
+fig, err = compare_filters(svd_fbk_filter_py, fir_fbk_filter_py,
                            n_samples=len(wfbkimpulse), fs=fs,
                            ref=wfbkimpulse)
 
-fig.write_image("figs/error_svd_fir_fbk.pdf") 
+fig.write_image("figs/error_svd_fir_fbk.pdf")
+
+
+# %%
+# =============================================================================
+# EFFECT OF THE DELAY (n_delay) ON RANK, SVD FILTER ERROR AND RESOURCES
+# =============================================================================
+# For each head length d = 0..5, on both paths:
+#   - Singular values of the Hankel matrix of the tail h[d:] -> numerical rank
+#   - FIR-SVD with B = 2M = 6 branches on h[d:], compared with the full FIR h:
+#       "head kept"    : HeadTailFilter (d direct taps + delayed SVD tail)
+#       "head dropped" : first d samples simply discarded (only delay line)
+#   - Coefficients of the head-kept FIR-SVD
+# Expected: rank = 2M + (n_delay - d) for d < n_delay and 2M from d = n_delay
+# on, where 6 branches become exact only if the head is kept.
+from plotly.subplots import make_subplots
+from aux_functions import run_filter
+
+d_values  = list(range(0, 6))
+rank_tol  = 1e-8        # sigma_k / sigma_1 below this is treated as zero
+B_test    = 6           # 2M branches
+# Longer responses, so that "extend" always has true samples available
+from aux_functions import get_impulse_response
+len_long  = len_filter + 4 * int(np.sqrt(len_filter))
+path_pt   = {"Secondary": "Caminho secundário", "Feedback": "Caminho de feedback"}
+paths     = {"Secondary": get_impulse_response(cbeam, len_long, controlpos, errorpos),
+             "Feedback":  get_impulse_response(cbeam, len_long, controlpos, referencepos)}
+
+def snr_db(y, h):
+    return 10 * np.log10(np.sum(h ** 2) / (np.sum((y - h) ** 2) + 1e-30))
+
+def svd_head_tail(h_long, d, n_fir, B, mode):
+    """
+    FIR-SVD of an n_fir-tap response with a d-tap head, R x C chosen by mode.
+    Returns the reference h (length of the implemented filter), the outputs
+    with head kept / dropped, the stacked-matrix singular values and R, C.
+    """
+    R_, C_, n_used, n_zeros = choose_RC(n_fir - d, mode, rc_max_ratio)
+    h    = h_long[:d + n_used]
+    tail = h[d:]
+    C_d, R_d, S_st = gen_SVD_weights_branches(tail, B, C_size=C_, verbose=False)
+    x    = np.zeros(len(h)); x[0] = 1.0
+    y_kept = run_filter(HeadTailFilter(FIRSVDFilterPy(C_d, R_d), h[:d]), x)
+    y_drop = run_filter(HeadTailFilter(FIRSVDFilterPy(C_d, R_d), np.zeros(d)), x)
+    return h, y_kept, y_drop, S_st, R_, C_, n_zeros
+
+delay_results = {name: {"rank": [], "snr_kept": [], "snr_drop": [], "coefs": [], "S": []}
+                 for name in paths}
+
+for name, h_long in paths.items():
+    print(f"{name}: first samples h[0:5] / max|h| =", np.round(h_long[:5] / np.max(np.abs(h_long)), 3))
+    for d in d_values:
+        tail = h_long[d:len_filter]
+
+        # Rank of the Hankel matrix of the tail
+        L_d = int(np.sqrt(len(tail))) + 1
+        S_d = np.linalg.svd(lagged_matrix(tail, L_d), compute_uv=False)
+        delay_results[name]["S"].append(S_d / S_d[0])
+        delay_results[name]["rank"].append(int(np.sum(S_d / S_d[0] > rank_tol)))
+
+        # FIR-SVD of the tail (R x C from rc_mode), with and without the d-tap head
+        h, y_kept, y_drop, _, R_, C_, _ = svd_head_tail(h_long, d, len_filter, B_test, rc_mode)
+        delay_results[name]["snr_kept"].append(snr_db(y_kept, h))
+        delay_results[name]["snr_drop"].append(snr_db(y_drop, h))
+        delay_results[name]["coefs"].append(B_test * (R_ + C_) + d)
+
+# --- Table ---
+W = 78
+print("\n" + "=" * W)
+print(f"{'EFFECT OF THE HEAD LENGTH d (FIR-SVD, %d branches, rc_mode = %s)' % (B_test, rc_mode):^{W}}")
+print("=" * W)
+for name in paths:
+    print(f"{name} path (FIR: {len_filter} coefs)")
+    print(f"{'d':>4}{'rank':>8}{'SNR head kept':>18}{'SNR head dropped':>20}{'coefs':>10}")
+    for i, d in enumerate(d_values):
+        r = delay_results[name]
+        print(f"{d:>4}{r['rank'][i]:>8}{r['snr_kept'][i]:>15.2f} dB{r['snr_drop'][i]:>17.2f} dB"
+              f"{r['coefs'][i]:>10}" + ("   <- n_delay" if d == n_delay else ""))
+    print("-" * W)
+print("=" * W)
+
+# --- Singular values for each d (both paths) ---
+fig = make_subplots(rows=1, cols=2, shared_yaxes=True,
+                    subplot_titles=[path_pt[name] for name in paths])
+for col, name in enumerate(paths, 1):
+    for i, d in enumerate(d_values):
+        S_norm = delay_results[name]["S"][i][:12]
+        fig.add_trace(go.Scatter(
+            x=np.arange(1, len(S_norm) + 1), y=S_norm,
+            mode="lines+markers", name=f"d = {d}",
+            legendgroup=f"d{d}", showlegend=(col == 1),
+            line=dict(width=3 if d == n_delay else 1, color=px.colors.qualitative.Plotly[i]),
+            marker=dict(color=px.colors.qualitative.Plotly[i]),
+        ), row=1, col=col)
+    fig.add_vline(x=B_test, line=dict(color="gray", dash="dot"), row=1, col=col)
+fig.update_yaxes(type="log", range=[-17, 0.5])          # all subplots (shared axes do not copy the type)
+fig.update_yaxes(title_text="σ<sub>k</sub> / σ<sub>1</sub>", row=1, col=1)
+fig.update_xaxes(title_text="Índice k")
+fig.update_layout(template="plotly_white", width=1000, height=450)
+fig.show()
+fig.write_image("figs/S_values_delay.pdf")
+
+# --- SNR of the FIR-SVD with 6 branches vs d (head kept vs dropped) ---
+fig = go.Figure()
+for name, color in zip(paths, ("#1D9E75", "#E8833A")):
+    fig.add_trace(go.Scatter(x=d_values, y=delay_results[name]["snr_kept"],
+                             mode="lines+markers", name=f"{path_pt[name]} — cabeça mantida",
+                             line=dict(color=color, width=2)))
+    fig.add_trace(go.Scatter(x=d_values, y=delay_results[name]["snr_drop"],
+                             mode="lines+markers", name=f"{path_pt[name]} — cabeça descartada",
+                             line=dict(color=color, width=1.5, dash="dash")))
+fig.add_vline(x=n_delay, line=dict(color="gray", dash="dot"),
+              annotation=dict(text=f"d = {n_delay}"))
+fig.update_layout(xaxis_title="Comprimento da cabeça d (amostras)",
+                  yaxis_title=f"SER do FIR-SVD com {B_test} ramos (dB)",
+                  template="plotly_white", width=750, height=450)
+fig.show()
+fig.write_image("figs/snr_delay.pdf")
+
+
+# %%
+# =============================================================================
+# EFFECT OF THE ZERO PADDING (rc_mode) ON THE STACKED MATRIX AND SVD ERROR
+# =============================================================================
+# Same filter (head of n_delay taps, 6 branches), three choices of R x C:
+#   pad    -> R*C > N, zeros at the end of the last column
+#   factor -> R*C = N exactly (or "extend" if N has no good divisor)
+#   extend -> R*C >= N filled with true samples of h
+# The zeros cut the exponential decay inside the last column, so the stacked
+# matrix gets extra (small) singular values beyond 2M and 6 branches are no
+# longer exact. Without padding, sigma_7 should drop to round-off level.
+rc_modes = ["pad", "factor", "extend"]
+pad_results = {name: {} for name in paths}
+
+for name, h_long in paths.items():
+    for mode in rc_modes:
+        h, y_kept, _, S_st, R_, C_, n_zeros = svd_head_tail(h_long, n_delay, len_filter,
+                                                             B_test, mode)
+        pad_results[name][mode] = dict(
+            R=R_, C=C_, zeros=n_zeros, taps=len(h), S=S_st / S_st[0],
+            sigma7=S_st[B_test] / S_st[0], snr=snr_db(y_kept, h),
+            coefs=B_test * (R_ + C_) + n_delay)
+
+W = 92
+print("\n" + "=" * W)
+print(f"{'EFFECT OF THE ZERO PADDING (d = %d, %d branches, FIR needs %d taps)' % (n_delay, B_test, len_filter):^{W}}")
+print("=" * W)
+print(f"{'path':<11}{'mode':<8}{'R x C':>10}{'zeros':>7}{'taps':>7}{'coefs':>7}"
+      f"{'sigma_7/sigma_1':>18}{'SNR B=6':>14}")
+print("-" * W)
+for name in paths:
+    for mode in rc_modes:
+        r = pad_results[name][mode]
+        print(f"{name:<11}{mode:<8}{r['R']:>5} x {r['C']:<3}{r['zeros']:>7}{r['taps']:>7}"
+              f"{r['coefs']:>7}{r['sigma7']:>18.3e}{r['snr']:>11.2f} dB")
+    print("-" * W)
+print("=" * W)
+
+# --- Stacked-matrix singular values for each mode ---
+fig = make_subplots(rows=1, cols=2, shared_yaxes=True,
+                    subplot_titles=[path_pt[name] for name in paths])
+for col, name in enumerate(paths, 1):
+    for j, (mode, dash) in enumerate(zip(rc_modes, ("solid", "dot", "dash"))):
+        r = pad_results[name][mode]
+        S_norm = r["S"][:12]
+        color = px.colors.qualitative.Plotly[j]
+        fig.add_trace(go.Scatter(
+            x=np.arange(1, len(S_norm) + 1), y=S_norm, mode="lines+markers",
+            name=f"{mode} ({r['R']}×{r['C']}, {r['zeros']} zeros)",
+            line=dict(dash=dash, color=color), marker=dict(color=color),
+            legendgroup=mode, showlegend=(col == 1),
+        ), row=1, col=col)
+    fig.add_vline(x=B_test, line=dict(color="gray", dash="dot"), row=1, col=col)
+fig.update_yaxes(type="log", range=[-17, 0.5])          # all subplots (shared axes do not copy the type)
+fig.update_yaxes(title_text="σ<sub>k</sub> / σ<sub>1</sub>", row=1, col=1)
+fig.update_xaxes(title_text="Índice k")
+fig.update_layout(template="plotly_white", width=1000, height=450)
+fig.show()
+fig.write_image("figs/S_values_padding.pdf")
 
 
 # %%

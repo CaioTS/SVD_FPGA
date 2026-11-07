@@ -39,6 +39,7 @@
 #
 # Resource utilization
 #   calc_svd_utilizations     : SVD FIR resources from its weight matrices
+#   choose_RC                 : rows/columns of the stacked matrix (pad/factor/extend)
 #   calc_svd_utilizations_teo : SVD FIR resources from filter size and branches
 #   calc_fir_utilization      : conventional FIR resources from filter size
 
@@ -883,14 +884,60 @@ def calc_svd_utilizations(C_weights, R_weights):
     return n_mem, num_coefs ,num_ops
 
 
-def calc_svd_utilizations_teo(W_size, N_branches):
+def choose_RC(n, mode="extend", max_ratio=1.5, verbose=True):
+    """
+    Rows R and columns C (R >= C) of the stacked matrix for an n-tap filter.
+
+    mode:
+        "pad"    : C = floor(sqrt n), R = ceil(n/C), zeros appended up to R*C.
+                   The zeros break the sum-of-exponentials structure of the
+                   last column (rank <= 2M + 1).
+        "factor" : R*C = n exactly (divisor of n closest to sqrt n); falls back
+                   to "extend" when no divisor gives R/C <= max_ratio.
+        "extend" : smallest R*C >= n with R/C <= max_ratio (ties: smallest
+                   R + C); the extra R*C - n taps are TRUE samples of h.
+
+    Returns (R, C, n_used, n_zeros): n_used samples of h go into the matrix
+    and n_zeros zeros are padded (n_used + n_zeros = R*C).
+    """
+    if mode == "pad":
+        C = int(np.sqrt(n))
+        R = int(np.ceil(n / C))
+        return R, C, n, R * C - n
+
+    if mode == "factor":
+        C = max(c for c in range(1, int(np.sqrt(n)) + 1) if n % c == 0)
+        R = n // C
+        if R / C <= max_ratio:
+            return R, C, n, 0
+        if verbose:
+            print(f"choose_RC: N = {n} has no divisor with R/C <= {max_ratio} "
+                  f"(best {R}x{C}); using 'extend'")
+
+    if mode in ("extend", "factor"):
+        best = None
+        c_min = int(np.ceil(np.sqrt(n / max_ratio)))
+        for C in range(c_min, int(np.ceil(np.sqrt(n))) + 1):
+            R = int(np.ceil(n / C))
+            if R < C or R / C > max_ratio:
+                continue
+            key = (R * C - n, R + C)          # fewest extra taps, then fewest coefs
+            if best is None or key < best[0]:
+                best = (key, R, C)
+        _, R, C = best
+        return R, C, R * C, 0
+
+    raise ValueError(f"unknown rc mode '{mode}'")
+
+
+def calc_svd_utilizations_teo(W_size, N_branches, rc_mode="extend", max_ratio=1.5):
     """
     Return memory, coefficients and number of operations necessary for
     the svd operation by receiving as input the filter size and branch.
-    Will assume the best R and C relation is the square of the filter_size.
+    R and C come from choose_RC (default "extend": no zero padding, R*C >= W_size
+    filled with true samples of the impulse response).
     """
-    R = int(np.ceil(np.sqrt(W_size))) # Size related to US
-    C = int(np.ceil(W_size/R)) # Assumes padding (size related to Vt)
+    R, C, _, _ = choose_RC(W_size, rc_mode, max_ratio, verbose=False)
 
     num_coefs = N_branches* (R + C)
     num_ops = (2*(R + C)*N_branches )+ N_branches - 1
