@@ -808,6 +808,92 @@ fig.write_image("figs/S_values_padding.pdf")
 
 
 # %%
+# =============================================================================
+# EFFECT OF ALIASING ON THE RANK
+# =============================================================================
+# A mode above fs/2 is still a pair of complex exponentials, only with apparent
+# frequency |f - k fs|. So aliasing does not ADD singular values beyond the pair
+# of each mode: the rank is 2 * (number of modes in the sampled signal),
+# including the modes above fs/2, not only the ones in the band of interest.
+# Test: same beam, fs = 832 Hz (no aliasing for 3 modes) and fs = 416 Hz
+# (mode 3 at ~250 Hz aliased to ~165 Hz), with 3 and 5 simulated modes.
+# The rank is computed on the tail h[n_delay:] (see the delay section).
+alias_cases = [(832.0, 3), (416.0, 3), (832.0, 5), (416.0, 5)]
+alias_time  = 3.3                       # response length (s), ~settling time
+alias_results = []
+
+for fs_a, nm in alias_cases:
+    beam_a = CantileverBeam(npoints=npoints, width=beamwidth, thickness=beamthickness,
+                            length=beamlength, Tsampling=1.0 / fs_a,
+                            damp=[0.01] * nm, nmodes=nm)
+    f_modes  = beam_a.freqsHz[:nm]
+    f_appar  = np.abs(f_modes - np.round(f_modes / fs_a) * fs_a)
+    for name, out in (("Secondary", errorpos), ("Feedback", referencepos)):
+        h_a  = get_impulse_response(beam_a, int(alias_time * fs_a), controlpos, out)
+        tail = h_a[n_delay:]
+        L_a  = int(np.sqrt(len(tail))) + 1
+        S_a  = np.linalg.svd(lagged_matrix(tail, L_a), compute_uv=False)
+        S_a  = S_a / S_a[0]
+        alias_results.append(dict(fs=fs_a, nmodes=nm, path=name, f=f_modes,
+                                  f_appar=f_appar, S=S_a,
+                                  rank=int(np.sum(S_a > rank_tol))))
+
+W = 108
+print("\n" + "=" * W)
+print(f"{'EFFECT OF ALIASING ON THE RANK (Hankel of h[%d:])' % n_delay:^{W}}")
+print("=" * W)
+print(f"{'fs (Hz)':>8}{'modes':>7}{'path':>11}  {'mode freqs (Hz)':<34}{'apparent (Hz)':<34}{'rank':>6}")
+print("-" * W)
+for r in alias_results:
+    print(f"{r['fs']:>8.0f}{r['nmodes']:>7}{r['path']:>11}  "
+          f"{np.array2string(r['f'], precision=1):<34}"
+          f"{np.array2string(r['f_appar'], precision=1):<34}{r['rank']:>6}")
+print("=" * W)
+
+# --- Singular values: 832 Hz vs 416 Hz (3 and 5 modes, both paths) ---
+fig = make_subplots(rows=1, cols=2, shared_yaxes=True,
+                    subplot_titles=[path_pt[name] for name in paths])
+styles = {(832.0, 3): ("#1D9E75", "solid"), (416.0, 3): ("#E8833A", "dash"),
+          (832.0, 5): ("#5B8DEF", "solid"), (416.0, 5): ("#E84393", "dash")}
+for col, name in enumerate(paths, 1):
+    for r in (r for r in alias_results if r["path"] == name):
+        color, dash = styles[(r["fs"], r["nmodes"])]
+        S_norm = r["S"][:14]
+        fig.add_trace(go.Scatter(
+            x=np.arange(1, len(S_norm) + 1), y=S_norm, mode="lines+markers",
+            name=f"f<sub>s</sub> = {r['fs']:.0f} Hz, {r['nmodes']} modos",
+            line=dict(color=color, dash=dash), marker=dict(color=color),
+            legendgroup=f"{r['fs']}-{r['nmodes']}", showlegend=(col == 1),
+        ), row=1, col=col)
+fig.update_yaxes(type="log", range=[-17, 0.5])
+fig.update_yaxes(title_text="σ<sub>k</sub> / σ<sub>1</sub>", row=1, col=1)
+fig.update_xaxes(title_text="Índice k")
+fig.update_layout(template="plotly_white", width=1000, height=450)
+fig.show()
+fig.write_image("figs/S_values_aliasing.pdf")
+
+# --- Coincident poles: when aliasing DOES reduce the rank ---
+# The rank is 2 per mode only while the poles z = exp((-beta + j w) / fs) are
+# distinct. A mode at f_b = f_a + fs with the SAME decay rate beta = zeta*w_n
+# has exactly the same z as the mode at f_a (aliased onto it), so the two
+# modes merge into a single pair and the rank drops from 4 to 2.
+# Synthetic test (not the beam): two decaying cosines, fs = 832 Hz.
+fs_c, beta_c, f_a = 832.0, 2.0, 89.5          # beta in 1/s
+n_c = np.arange(int(3.3 * fs_c))
+coincident = []
+for label, f_b in (("f_b = f_a + 37 Hz (distinct z)", f_a + 37.0),
+                   ("f_b = f_a + fs (same z)",        f_a + fs_c)):
+    h_c = (np.exp(-beta_c * n_c / fs_c) * np.cos(2 * np.pi * f_a * n_c / fs_c)
+           + 0.5 * np.exp(-beta_c * n_c / fs_c) * np.cos(2 * np.pi * f_b * n_c / fs_c + 0.3))
+    L_c = int(np.sqrt(len(h_c))) + 1
+    S_c = np.linalg.svd(lagged_matrix(h_c, L_c), compute_uv=False)
+    coincident.append((label, int(np.sum(S_c / S_c[0] > rank_tol))))
+print("\nCoincident-pole test (2 modes, same decay rate):")
+for label, rk in coincident:
+    print(f"  {label:<34} rank = {rk}")
+
+
+# %%
 # Joint SVD Tryouts
 
 def compute_optimal_angle(Q):
