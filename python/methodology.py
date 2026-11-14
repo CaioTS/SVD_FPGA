@@ -17,6 +17,16 @@ from aux_functions import (
     choose_RC,
 )
 
+
+def save_fig(fig, path, show=True):
+    """Remove the title (the dissertation uses the LaTeX caption), write the
+    figure and show it, so the figure on screen is the same as the saved file.
+    Subplot titles (panel labels) are kept."""
+    fig.update_layout(title_text=None, margin=dict(t=40))
+    fig.write_image(path)
+    if show:
+        fig.show()
+
 # %%
 # =============================================================================
 # SIMULATION PARAMETERS
@@ -145,8 +155,7 @@ fig.update_layout(
     yaxis=dict(range=[-(beamthickness + 0.1), beamthickness + 0.1]),
     width=600, height=350
 )
-fig.show()
-fig.write_image("figs/cantilever_beam.pdf") 
+save_fig(fig, "figs/cantilever_beam.pdf") 
 
 # %%
 # =============================================================================
@@ -198,7 +207,7 @@ ax.plot(t_fbk, wfbkimpulse[:limit], linewidth=1, label="Caminho de feedback")
 
 ax.set_xlabel("Amostras")  # or "Tempo (ms)" if using fs
 ax.set_ylabel("Amplitude")
-ax.set_title("Respostas ao impulso dos caminhos secundário e de feedback")
+# no title: the dissertation uses \caption
 ax.grid(True, alpha=0.3)
 ax.legend()
 
@@ -215,9 +224,8 @@ fig = plot_fft_onesided_pair(wsecimpulse, wfbkimpulse, fs=fs,
                              labels=("Secondary path", "Feedback path"),
                         title="Frequency response of the paths")
 
-fig.update_yaxes(range=[-100, -30]) 
-fig.show()
-fig.write_image("figs/frequencies_responses.pdf") 
+fig.update_yaxes(range=[-120, -30]) 
+save_fig(fig, "figs/frequencies_responses.pdf") 
 # %%
 # =============================================================================
 # OBTAIN RESSONANCE FREQUENCIES AND THEIR 3 DB correspondent FOR SECONDARY
@@ -261,26 +269,28 @@ for i, r in enumerate(results, 1):
     print(f"-3 dB upper         : {r['f_3db_high']:.3f} Hz")
     print(f"Bandwidth           : {r['bandwidth_3db']:.3f} Hz")
 
-frequencies  = np.array([r["frequency"] for r in results])
-f_3db_lower  = np.array([r["f_3db_low"] for r in results])
-f_3db_higher = np.array([r["f_3db_high"] for r in results])
+frequencies_fbk  = np.array([r["frequency"] for r in results])
+f_3db_lower_fbk  = np.array([r["f_3db_low"] for r in results])
+f_3db_higher_fbk = np.array([r["f_3db_high"] for r in results])
 
-print(frequencies , f_3db_lower , f_3db_higher)
+print(frequencies_fbk , f_3db_lower_fbk , f_3db_higher_fbk)
 
 # %%
 # =============================================================================
 # CALCULATE DAMPING COEFFICIENT FOR FEEDBACK PATH
 # =============================================================================
-damping_coef  = np.zeros_like(frequencies)
+damping_coef_fbk  = np.zeros_like(frequencies_fbk)
 
-for i , (f, fl, fh) in enumerate(zip(frequencies , f_3db_lower , f_3db_higher)):
-    damping_coef[i] = (fh - fl) / (2*f)
+for i , (f, fl, fh) in enumerate(zip(frequencies_fbk , f_3db_lower_fbk , f_3db_higher_fbk)):
+    damping_coef_fbk[i] = (fh - fl) / (2*f)
 
-print(damping_coef) 
+print(damping_coef_fbk) 
 # %%
 # =============================================================================
 # CALCULATE ACCOMMODATION TIME AND FILTER'S LENGTH FOR SECONDARY
 # =============================================================================
+# Uses the secondary path modes (frequencies, damping_coef). The feedback path
+# modes are kept in *_fbk so they do not overwrite these.
 Threshold = [0.05, 0.02, 0.01]
 
 acc_time  = np.zeros((len(Threshold), len(frequencies)))
@@ -347,8 +357,7 @@ U_lagged, S_lagged, VT_lagged = svd_report("Lagged",  wsec_lagged)
 #fig = plot_singular_values(S_lagged, S_stack, normalize=True,  log_y=False)
 fig = plot_singular_values(S_lagged, S_stack, normalize=False, log_y=True)
 fig.update_xaxes(range=[1, 12]) 
-fig.show()
-fig.write_image("figs/S_values_comp.pdf") 
+save_fig(fig, "figs/S_values_comp.pdf") 
 # %%
 # =============================================================================
 # COMPARE ORIGINAL FILTER AND SVD FILTER PARAMETERS
@@ -399,7 +408,6 @@ print(
 
 print("=" * 80)
 #%%
-fs = 416
 
 N = np.arange(500,4000,300)
 svd_coefs_teo = np.zeros_like(N)
@@ -472,7 +480,7 @@ fig.show()
 # %%
 # --- Theoretical curves ---
 N_branches = 6
-N = np.arange(500, 4000, 300)
+N = np.arange(500, 4600, 100)   # covers the three thresholds (up to N_1% = 4229)
 
 # SVD part models n - n_delay coefficients; the n_delay-tap head is added on top
 svd = np.array([calc_svd_utilizations_teo(n - n_delay, N_branches, rc_mode, rc_max_ratio) for n in N])  # (len(N), 3)
@@ -498,9 +506,13 @@ for thresh, n in N_patamars.items():
         "Memory":       100 * (1 - m_svd/m_fir), 
         "Operations":   100 * (1 - o_svd/o_fir)}
 
-# Access as:
-# --- Simulated values for different trhesholds 
-# --- Plot ---
+# --- Plot: coefficients/operations on the left axis, memory on the right ---
+# The memory compression is much lower than the other two, so each group gets
+# its own y-axis (better resolution). Horizontal lines mark the compression of
+# each threshold: to the left axis for coefficients/operations and to the
+# right axis for memory.
+from plotly.subplots import make_subplots
+
 colors = {
     "Coefficients": "#1D9E75",
     "Memory":       "#E8833A",
@@ -511,59 +523,73 @@ theory = {
     "Memory":       compression_mems,
     "Operations":   compression_ops,
 }
+on_right = {"Coefficients": False, "Operations": False, "Memory": True}
 
-fig = go.Figure()
+x_min, x_max = N[0], N[-1]
+fig = make_subplots(specs=[[{"secondary_y": True}]])
 
 for name, y in theory.items():
-    # ── Theoretical curve ────────────────────────────────────────
+    # Theoretical curve
     fig.add_trace(go.Scatter(
-        x=N, y=y, mode="lines",
-        name=f"{name}",
-        line=dict(color=colors[name], width=2),
+        x=N, y=y, mode="lines", name=name,
+        line=dict(color=colors[name], width=2,
+                  dash="dash" if name == "Operations" else "solid"),
         legendgroup=name,
-        showlegend=True,
-    ))
-    # ── Experimental markers — one per threshold ─────────────────
+    ), secondary_y=on_right[name])
     for thresh, n in N_patamars.items():
+        val = utilizations[thresh][name]
+        # Horizontal line from the marker to the axis of this metric
+        x_end = x_max if on_right[name] else x_min
         fig.add_trace(go.Scatter(
-            x=[n],
-            y=[utilizations[thresh][name]],
-            mode="markers",
-            showlegend=False,
-            name=f"thresh={thresh}",
-            marker=dict(
-                color=colors[name],   # explicit per-metric color
-                size=12,
-                symbol="diamond",
-                line=dict(color="white", width=1.5)
-            )
-        ))
+            x=[x_end, n], y=[val, val], mode="lines", showlegend=False,
+            legendgroup=name, hoverinfo="skip",
+            line=dict(color=colors[name], width=1, dash="dot"),
+        ), secondary_y=on_right[name])
+        # Marker of the threshold
+        fig.add_trace(go.Scatter(
+            x=[n], y=[val], mode="markers", showlegend=False,
+            legendgroup=name, name=f"thresh={thresh}",
+            marker=dict(color=colors[name], size=11, symbol="diamond",
+                        line=dict(color="white", width=1.5)),
+        ), secondary_y=on_right[name])
 
-# ── Vertical lines — stagger annotation positions to avoid overlap ──
-positions = ["left", "center", "right"]
-for i, (thresh, n) in enumerate(N_patamars.items()):
-    fig.add_vline(
-        x=n,
-        line=dict(color="gray", width=1, dash="dot"),
-        annotation=dict(
-            text=f"τ={thresh}",   # shorter text
-            textangle=-90,         # rotate to save horizontal space
-            font=dict(size=10),
-            align=positions[i % len(positions)]
-        )
-    )
+# Values of the thresholds next to the markers: coefficients/operations above,
+# memory below. Coefficients and operations differ by < 0.2 %, so they share
+# one label.
+for thresh, n in N_patamars.items():
+    u = utilizations[thresh]
+    fig.add_annotation(x=n, y=u["Coefficients"], xref="x", yref="y",
+                       text=f"{u['Coefficients']:.1f} / {u['Operations']:.1f} %",
+                       showarrow=False, xanchor="right", yanchor="bottom",
+                       xshift=-4, yshift=4,
+                       font=dict(size=10, color="black"))
+    fig.add_annotation(x=n, y=u["Memory"], xref="x", yref="y2",
+                       text=f"{u['Memory']:.1f} %", showarrow=False,
+                       xanchor="left", yanchor="top", xshift=4, yshift=-6,
+                       font=dict(size=10, color=colors["Memory"]))
 
-fig.update_layout(
-    title=f"SVD FIR vs FIR Compression — {N_branches} branches",
-    xaxis_title="Filter size N",
-    yaxis_title="Compression (%)",
-    yaxis=dict(range=[0, 100]),
-    template="plotly_white",
-    hovermode="x unified"
-    #legend=dict(groupclick="toggleitem")
-)
-fig.show()
-fig.write_image("figs/Parameters_comp.pdf")
+# Vertical lines at the filter length of each threshold
+for thresh, n in N_patamars.items():
+    fig.add_vline(x=n, line=dict(color="gray", width=1, dash="dot"),
+                  annotation_position="bottom right",
+                  annotation=dict(text=f"τ = {thresh * 100:.0f} %",
+                                  textangle=-90, font=dict(size=10, color="gray")))
+
+fig.update_xaxes(title_text="Filter size N", range=[x_min, x_max])
+# Ranges chosen so that the two groups of curves do not overlap
+fig.update_yaxes(title_text="Coefficients / operations compression (%)",
+                 range=[30, 85], secondary_y=False,
+                 title_font=dict(color="black"),
+                 tickfont=dict(color="black"))
+fig.update_yaxes(title_text="Memory compression (%)", range=[0, 60],
+                 showgrid=False, secondary_y=True,
+                 title_font=dict(color=colors["Memory"]),
+                 tickfont=dict(color=colors["Memory"]))
+fig.update_layout(template="plotly_white", hovermode="x unified",
+                  width=800, height=480,
+                  legend=dict(x=0.25, y=0.03, xanchor="left", yanchor="bottom",
+                              bgcolor="rgba(255,255,255,0.8)"))
+save_fig(fig, "figs/Parameters_comp.pdf")
 
 # %%
 #Compare filter outputs 
@@ -574,9 +600,9 @@ fir_filter_py = FIR(wsecimpulse)
 
 fig, err = compare_filters(svd_filter_py, fir_filter_py,
                            n_samples=len(wsecimpulse), fs=fs,
-                           ref=wsecimpulse)
+                           ref=wsecimpulse, title=None)   # compare_filters already shows it
 
-fig.write_image("figs/error_svd_fir.pdf") 
+save_fig(fig, "figs/error_svd_fir.pdf", show=False)
 
 
 #%% Feedback Results
@@ -614,8 +640,7 @@ U_lagged_fbk, S_lagged_fbk, VT_lagged_fbk = svd_report("Lagged",  wfbk_lagged)
 
 fig = plot_singular_values(S_lagged_fbk, S_stack_fbk,normalize=False,log_y=True)
 fig.update_xaxes(range=[1, 12]) 
-fig.show()
-fig.write_image("figs/S_values_comp_fbk.pdf")
+save_fig(fig, "figs/S_values_comp_fbk.pdf")
 # %%
 #Compare filter outputs 
  
@@ -624,9 +649,56 @@ fir_fbk_filter_py = FIR(wfbkimpulse)
 
 fig, err = compare_filters(svd_fbk_filter_py, fir_fbk_filter_py,
                            n_samples=len(wfbkimpulse), fs=fs,
-                           ref=wfbkimpulse)
+                           ref=wfbkimpulse, title=None)   # compare_filters already shows it
 
-fig.write_image("figs/error_svd_fir_fbk.pdf")
+save_fig(fig, "figs/error_svd_fir_fbk.pdf", show=False)
+
+
+# %%
+# =============================================================================
+# FFT OF THE RECONSTRUCTED COMPONENTS OF EACH PAIR (HANKEL MATRIX OF THE TAIL)
+# =============================================================================
+# SVD of the Hankel matrix of the tail h[n_delay:len_total]. Each elementary
+# term sigma_i u_i v_i^T is turned back into a series by diagonal averaging
+# (SSA reconstructed component, Golyandina2013 Sec. 2.1.1, Eq. 2.4-2.5). The
+# components of all terms add up to the tail exactly, and each pair of
+# components should carry one resonance.
+# Why not the FFT of the "branches": a FIR-SVD with Hankel weights (stride L,
+# C = K columns) does not implement h; its impulse response is the Hankel
+# columns one after another (L*K samples). Simulated over len(h) samples it
+# gives a comb with period fs/L, and with fewer than L samples it reduces to
+# the short FIR v_i[0] sigma_i u_i only.
+from aux_functions import plot_paired_branches_fft
+
+def reconstructed_components(x, L, n_comp):
+    """
+    Elementary reconstructed components of x (Basic SSA) for the n_comp
+    largest singular values of the L x K Hankel matrix.
+    Diagonal averaging of sigma_i u_i v_i^T = sigma_i (u_i * v_i)[n] / count[n],
+    count[n] = number of elements in antidiagonal n. Returns (len(x), n_comp).
+    """
+    N_x = len(x)
+    K_x = N_x - L + 1
+    U_x, S_x, VT_x = np.linalg.svd(lagged_matrix(x, L), full_matrices=False)
+    n = np.arange(N_x)
+    count = np.minimum.reduce([n + 1, np.full(N_x, L), np.full(N_x, K_x), N_x - n])
+    rc = np.stack([S_x[i] * np.convolve(U_x[:, i], VT_x[i]) / count
+                   for i in range(n_comp)], axis=1)
+    return rc, S_x
+
+# y range per path: the feedback components go down to about -109 dB
+for name, tail_h, fname, ylim in (("Secondary", wsecimpulse[n_delay:len_total], "figs/Hankel_Branches_FFT.pdf",     [-100, 0]),
+                                  ("Feedback",  wfbkimpulse[n_delay:len_total], "figs/Hankel_Branches_FFT_fbk.pdf", [-120, -20])):
+    rc, S_rc = reconstructed_components(tail_h, len(tail_h) // 2, 6)
+    # The tail has rank 2M = 6, so the 6 components must add up to it
+    err = np.max(np.abs(rc.sum(axis=1) - tail_h)) / np.max(np.abs(tail_h))
+    print(f"{name}: sigma/sigma1 = {np.round(S_rc[:6] / S_rc[0], 3)} | "
+          f"max|sum of components - tail| / max|tail| = {err:.1e}")
+    fig = plot_paired_branches_fft(rc, fs=fs)
+    fig.for_each_trace(lambda t: t.update(
+        name=t.name.replace("Branches", "Components").replace("Branch", "Component")))
+    fig.update_yaxes(range=ylim)
+    save_fig(fig, fname)
 
 
 # %%
@@ -725,8 +797,7 @@ fig.update_yaxes(type="log", range=[-17, 0.5])          # all subplots (shared a
 fig.update_yaxes(title_text="σ<sub>k</sub> / σ<sub>1</sub>", row=1, col=1)
 fig.update_xaxes(title_text="Índice k")
 fig.update_layout(template="plotly_white", width=1000, height=450)
-fig.show()
-fig.write_image("figs/S_values_delay.pdf")
+save_fig(fig, "figs/S_values_delay.pdf")
 
 # --- SNR of the FIR-SVD with 6 branches vs d (head kept vs dropped) ---
 fig = go.Figure()
@@ -742,8 +813,7 @@ fig.add_vline(x=n_delay, line=dict(color="gray", dash="dot"),
 fig.update_layout(xaxis_title="Comprimento da cabeça d (amostras)",
                   yaxis_title=f"SER do FIR-SVD com {B_test} ramos (dB)",
                   template="plotly_white", width=750, height=450)
-fig.show()
-fig.write_image("figs/snr_delay.pdf")
+save_fig(fig, "figs/snr_delay.pdf")
 
 
 # %%
@@ -803,8 +873,7 @@ fig.update_yaxes(type="log", range=[-17, 0.5])          # all subplots (shared a
 fig.update_yaxes(title_text="σ<sub>k</sub> / σ<sub>1</sub>", row=1, col=1)
 fig.update_xaxes(title_text="Índice k")
 fig.update_layout(template="plotly_white", width=1000, height=450)
-fig.show()
-fig.write_image("figs/S_values_padding.pdf")
+save_fig(fig, "figs/S_values_padding.pdf")
 
 
 # %%
@@ -869,8 +938,7 @@ fig.update_yaxes(type="log", range=[-17, 0.5])
 fig.update_yaxes(title_text="σ<sub>k</sub> / σ<sub>1</sub>", row=1, col=1)
 fig.update_xaxes(title_text="Índice k")
 fig.update_layout(template="plotly_white", width=1000, height=450)
-fig.show()
-fig.write_image("figs/S_values_aliasing.pdf")
+save_fig(fig, "figs/S_values_aliasing.pdf")
 
 # --- Coincident poles: when aliasing DOES reduce the rank ---
 # The rank is 2 per mode only while the poles z = exp((-beta + j w) / fs) are
